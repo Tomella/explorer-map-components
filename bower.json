@@ -24,6 +24,7 @@
     "**/.*",
     "node_modules",
     "bower_components",
+    "source",
     "test",
     "tests",
     "gulpfile.js",
