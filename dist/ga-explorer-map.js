@@ -975,73 +975,6 @@ angular.module("explorer.crosshair", ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L){
-	
-'use strict';
-
-angular.module("geo.draw", ['geo.map'])
-
-.directive("geoDraw", ['$log', '$rootScope', 'mapService', function($log, $rootScope, mapService) {
-	var DEFAULTS = {
-		rectangleEvent : "geo.draw.rectangle.created",
-		lineEvent : "geo.draw.line.created"
-	};
-	
-	
-	return {
-		restrict : "AE",
-		scope : {
-			data: "=",
-			rectangleEvent : "@",
-			lineEvent : "@"
-		},
-		link : function(scope, element, attrs, ctrl) {
-			angular.forEach(DEFAULTS, function(value, key) {
-				if(!scope[key]) {
-					scope[key] = value;
-				}
-			});
-						
-			mapService.getMap().then(function(map) {
-				var drawnItems = new L.FeatureGroup(),
-				    drawControl,
-				    options = { 
-				       edit: {
-				          featureGroup: drawnItems
-				       }
-				    };
-	
-				if(scope.data) {
-					angular.extend(options, scope.data);
-				}				
-				scope.drawnItems = drawnItems;
-				
-				map.addLayer(drawnItems);
-				// Initialise the draw control and pass it the FeatureGroup of editable layers
-				drawControl = new L.Control.Draw(options);
-				map.addControl(drawControl);
-				map.on("draw:created", function(event) {
-					scope.$apply(function() {
-						({
-							polyline : function() {
-								var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
-								$rootScope.$broadcast(scope.lineEvent, data);
-							},
-							rectangle : function() {
-								$log.info("rect");
-							}
-						})[event.layerType]();
-					});
-				});					
-			});
-		}
-	};
-}]);
-
-})(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 /**
  * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
  */
@@ -1374,105 +1307,70 @@ angular.module("geo.elevation", [
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(L) {
+(function(angular, L){
+	
+'use strict';
 
-'use strict';	
+angular.module("geo.draw", ['geo.map'])
 
-L.Control.Legend = L.Control.extend({
-    _active: false,
-    _map: null,
-    includes: L.Mixin.Events,
-    options: {
-        position: 'topleft',
-        className: 'fa fa-search-minus',
-        modal: false
-    },
-    onAdd: function (map) {
-        this._map = map;
-        this._container = L.DomUtil.create('div', 'leaflet-zoom-box-control leaflet-bar');
-        this._container.title = "Zoom out";
-        var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        map.on('zoomend', function(){
-            if (map.getZoom() == map.getMaxZoom()){
-                L.DomUtil.addClass(link, 'leaflet-disabled');
-            }
-            else {
-                L.DomUtil.removeClass(link, 'leaflet-disabled');
-            }
-        }, this);
-        map.on('boxzoomend', this.deactivate, this);
-
-        L.DomEvent
-            .on(this._container, 'dblclick', L.DomEvent.stop)
-            .on(this._container, 'click', L.DomEvent.stop)
-            .on(this._container, 'click', function(){
-                this._active = !this._active;
-
-				var newZoom, zoom = map.getZoom();
-				if(zoom <= map.getMinZoom()) {
-					return;
-				} 				
-				if(zoom < 10) {
-					newZoom = zoom - 1;
-				} else if(zoom < 13) {
-					newZoom = zoom - 2;
-				} else {
-					newZoom = zoom - 3;
+.directive("geoDraw", ['$log', '$rootScope', 'mapService', function($log, $rootScope, mapService) {
+	var DEFAULTS = {
+		rectangleEvent : "geo.draw.rectangle.created",
+		lineEvent : "geo.draw.line.created"
+	};
+	
+	
+	return {
+		restrict : "AE",
+		scope : {
+			data: "=",
+			rectangleEvent : "@",
+			lineEvent : "@"
+		},
+		link : function(scope, element, attrs, ctrl) {
+			angular.forEach(DEFAULTS, function(value, key) {
+				if(!scope[key]) {
+					scope[key] = value;
 				}
-				map.setZoom(newZoom);				
-            }, this);
-        return this._container;
-    },
-    activate: function() {
-        L.DomUtil.addClass(this._container, 'active');
-    },
-    deactivate: function() {
-        L.DomUtil.removeClass(this._container, 'active');
-        this._active = false;
-    }
-});
+			});
+						
+			mapService.getMap().then(function(map) {
+				var drawnItems = new L.FeatureGroup(),
+				    drawControl,
+				    options = { 
+				       edit: {
+				          featureGroup: drawnItems
+				       }
+				    };
+	
+				if(scope.data) {
+					angular.extend(options, scope.data);
+				}				
+				scope.drawnItems = drawnItems;
+				
+				map.addLayer(drawnItems);
+				// Initialise the draw control and pass it the FeatureGroup of editable layers
+				drawControl = new L.Control.Draw(options);
+				map.addControl(drawControl);
+				map.on("draw:created", function(event) {
+					scope.$apply(function() {
+						({
+							polyline : function() {
+								var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
+								$rootScope.$broadcast(scope.lineEvent, data);
+							},
+							rectangle : function() {
+								$log.info("rect");
+							}
+						})[event.layerType]();
+					});
+				});					
+			});
+		}
+	};
+}]);
 
-L.control.zoomout = function (options) {
-  return new L.Control.Zoomout(options);
-};
-
-
-
-
-var populationLegend = L.control({position: 'bottomright'});
-var populationChangeLegend = L.control({position: 'bottomright'});
-
-populationLegend.onAdd = function (map) {
-var div = L.DomUtil.create('div', 'info legend');
-    div.innerHTML +=
-    '<img src="legend.png" alt="legend" width="134" height="147">';
-return div;
-};
-
-populationChangeLegend.onAdd = function (map) {
-var div = L.DomUtil.create('div', 'info legend');
-    div.innerHTML +=
-    '<img src="change_legend.png" alt="legend" width="134" height="147">';
-return div;
-};
-
-// Add this one (only) for now, as the Population layer is on by default
-populationLegend.addTo(map);
-
-map.on('overlayadd', function (eventLayer) {
-    // Switch to the Population legend...
-    if (eventLayer.name === 'Population') {
-        this.removeControl(populationChangeLegend);
-        populationLegend.addTo(this);
-    } else { // Or switch to the Population Change legend...
-        this.removeControl(populationLegend);
-        populationChangeLegend.addTo(this);
-    }
-});
-
-})(L);
+})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1682,6 +1580,108 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(L) {
+
+'use strict';	
+
+L.Control.Legend = L.Control.extend({
+    _active: false,
+    _map: null,
+    includes: L.Mixin.Events,
+    options: {
+        position: 'topleft',
+        className: 'fa fa-search-minus',
+        modal: false
+    },
+    onAdd: function (map) {
+        this._map = map;
+        this._container = L.DomUtil.create('div', 'leaflet-zoom-box-control leaflet-bar');
+        this._container.title = "Zoom out";
+        var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        map.on('zoomend', function(){
+            if (map.getZoom() == map.getMaxZoom()){
+                L.DomUtil.addClass(link, 'leaflet-disabled');
+            }
+            else {
+                L.DomUtil.removeClass(link, 'leaflet-disabled');
+            }
+        }, this);
+        map.on('boxzoomend', this.deactivate, this);
+
+        L.DomEvent
+            .on(this._container, 'dblclick', L.DomEvent.stop)
+            .on(this._container, 'click', L.DomEvent.stop)
+            .on(this._container, 'click', function(){
+                this._active = !this._active;
+
+				var newZoom, zoom = map.getZoom();
+				if(zoom <= map.getMinZoom()) {
+					return;
+				} 				
+				if(zoom < 10) {
+					newZoom = zoom - 1;
+				} else if(zoom < 13) {
+					newZoom = zoom - 2;
+				} else {
+					newZoom = zoom - 3;
+				}
+				map.setZoom(newZoom);				
+            }, this);
+        return this._container;
+    },
+    activate: function() {
+        L.DomUtil.addClass(this._container, 'active');
+    },
+    deactivate: function() {
+        L.DomUtil.removeClass(this._container, 'active');
+        this._active = false;
+    }
+});
+
+L.control.zoomout = function (options) {
+  return new L.Control.Zoomout(options);
+};
+
+
+
+
+var populationLegend = L.control({position: 'bottomright'});
+var populationChangeLegend = L.control({position: 'bottomright'});
+
+populationLegend.onAdd = function (map) {
+var div = L.DomUtil.create('div', 'info legend');
+    div.innerHTML +=
+    '<img src="legend.png" alt="legend" width="134" height="147">';
+return div;
+};
+
+populationChangeLegend.onAdd = function (map) {
+var div = L.DomUtil.create('div', 'info legend');
+    div.innerHTML +=
+    '<img src="change_legend.png" alt="legend" width="134" height="147">';
+return div;
+};
+
+// Add this one (only) for now, as the Population layer is on by default
+populationLegend.addTo(map);
+
+map.on('overlayadd', function (eventLayer) {
+    // Switch to the Population legend...
+    if (eventLayer.name === 'Population') {
+        this.removeControl(populationChangeLegend);
+        populationLegend.addTo(this);
+    } else { // Or switch to the Population Change legend...
+        this.removeControl(populationLegend);
+        populationChangeLegend.addTo(this);
+    }
+});
+
+})(L);
 (function (angular, google, window) {
 
 'use strict';
@@ -1791,6 +1791,76 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 }]);
 
 }(angular, google, window));
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular) {	
+
+'use strict';
+
+angular.module('explorer.layer.inpector', ['explorer.layers'])
+
+.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
+	return {
+		restrict:"AE",
+		scope:{
+			click : "&",
+			showClose : "=?",
+			active:"=",
+			name:"=?"
+		},
+		controller : ['$scope', function($scope){
+			$scope.toggleShow = function() {
+				var active = this.active;
+				if(!active.isWrapped) {
+					active = layerService.decorate(active);
+					active.init();
+					active.show = true;
+					active.showExtra = true;
+				}
+				active.displayed = active.handleShow();
+			};
+		}],		
+		templateUrl : "map/layerinspector/layerInspector.html?v=1"
+	};
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular) {
+'use strict';
+
+angular.module("explorer.layer.slider", [])
+
+.directive('explorerLayerSlider', [function() {
+	return {
+		template : '<slider min="0" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
+		scope: {
+			layer:"=?"
+		},
+		
+		link: function(scope, element, attrs) {
+			scope.slider = {
+				opacity:1,
+				visibility:true
+			};
+
+			scope.$watch("slider.opacity", function(newValue, oldValue) {
+				if(scope.layer) {
+					scope.layer.setOpacity(newValue);
+				}
+			});
+
+			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
+				scope.slider.opacity = newValue;
+			});
+		}
+	};	
+}]);
+
+})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1986,76 +2056,6 @@ angular.module('explorer.layers', ['geo.map'])
 }]);
 
 })(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular) {	
-
-'use strict';
-
-angular.module('explorer.layer.inpector', ['explorer.layers'])
-
-.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
-	return {
-		restrict:"AE",
-		scope:{
-			click : "&",
-			showClose : "=?",
-			active:"=",
-			name:"=?"
-		},
-		controller : ['$scope', function($scope){
-			$scope.toggleShow = function() {
-				var active = this.active;
-				if(!active.isWrapped) {
-					active = layerService.decorate(active);
-					active.init();
-					active.show = true;
-					active.showExtra = true;
-				}
-				active.displayed = active.handleShow();
-			};
-		}],		
-		templateUrl : "map/layerinspector/layerInspector.html?v=1"
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular) {
-'use strict';
-
-angular.module("explorer.layer.slider", [])
-
-.directive('explorerLayerSlider', [function() {
-	return {
-		template : '<slider min="0" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
-		scope: {
-			layer:"=?"
-		},
-		
-		link: function(scope, element, attrs) {
-			scope.slider = {
-				opacity:1,
-				visibility:true
-			};
-
-			scope.$watch("slider.opacity", function(newValue, oldValue) {
-				if(scope.layer) {
-					scope.layer.setOpacity(newValue);
-				}
-			});
-
-			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
-				scope.slider.opacity = newValue;
-			});
-		}
-	};	
-}]);
-
-})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3389,484 +3389,6 @@ angular.module("geo.measure", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L, window) {
-'use strict';
-
-angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
-
-.directive("expPoint", ['pointService', function(pointService) {
-	return {
-		scope : {
-			data : "=point"
-		},		
-		controller : ['$scope', function($scope) {
-			$scope.$watch("data", function(newData, oldData) {
-				if(newData || oldData) {
-					pointService.showPoint($scope.data);
-				}
-			});
-		}]
-	};
-}])
-
-.directive("expClickMapPoint", ['pointService', function(pointService) {
-	return {
-		restrict:'AE',
-		scope : {
-		},		
-		link : function(scope, element) {
-			pointService.addMapListener(function(latlon) {
-				pointService.showPoint(latlon);
-			}, this);
-		}
-	};
-}])
-
-.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
-	var defaultOptions = {
-			actions : [],
-			visible : true,
-			modal : false,
-			minWidth : 240,
-			title : "Features within approx 2km",
-			position : {top:140, left:40}
-		};
-	
-	return {
-		restrict:"AE",
-		templateUrl : "map/point/point.html?v=2.7",
-		scope :true,
-		controller : ['$scope', function($scope) {
-			if($scope.options) {
-				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
-			} else {
-				$scope.windowOptions = angular.extend({}, defaultOptions);
-			}
-		}],
-		link : function(scope, element) {
-			console.log("Id = ", scope.$id);
-			// This things is a one shot wonder so we listen for an event.
-			$rootScope.$on("map.point.changed", function(event, point) {
-				scope.point = point;
-				pointService.removeLayer();
-				if(typeof point != "undefined" && point) {
-					scope.changePoint(point);
-					pointService.getMetaData().then(function(response) {
-						scope.metadata = response.data;
-					});
-				}
-			});
-			
-			scope.createTitle = function() {
-				var oneItem = !this.greaterThanOneItem(),
-					layerName = this.feature.layerName,
-					metadata = this.metadata[layerName],
-					preferredLabel = metadata.preferredLabel,
-					value = this.feature.attributes[preferredLabel];
-				
-				if(!oneItem && value && value != "Null") {
-					return value;
-				} else {
-					return metadata.label;
-				}				
-			};
-			
-			scope.changePoint = function(newValue) {
-				pointService.moveMarker(newValue);
-				if(newValue) {
-					pointService.getInfo(newValue).then(function(data) {
-						handleResponse(data);
-					});
-				}
-				pointService.removeLayer();
-			};
-			
-			scope.clearPoint = function() {
-				scope.point = false;
-				pointService.removeLayer();
-				pointService.removeMarker();
-			};
-			
-			scope.toggleShow = function() {
-				this.feature.displayed = !this.feature.displayed;
-				if(this.feature.displayed) {
-					this.feature.feature = pointService.showFeature(this.feature);
-				} else {
-					pointService.hideFeature(this.feature.feature);
-					this.feature.layer = null;
-				}
-			};			
-			
-			scope.oneShowing = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				return oneShown;
-			};
-			
-			scope.greaterThanOneItem = function() {
-				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
-			};
-			
-			scope.groupShow = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				
-				group.forEach(function(feature) {
-					if(oneShown) {
-						feature.feature = pointService.hideFeature(feature.feature);
-						feature.displayed = false;
-					} else {
-						feature.feature = pointService.showFeature(feature);
-						feature.displayed = true;
-					}
-				});
-			};			
-			
-			scope.allHidden = function() {
-				var allHidden = true;
-				if(this.featuresInfo && this.featuresInfo.results) {
-					this.featuresInfo.results.forEach(function(feature) {
-						allHidden &= !feature.displayed;
-					});
-				}
-				return allHidden;
-			};
-			
-			scope.toggleAll = function() {
-				var allHidden = scope.allHidden();
-				this.featuresInfo.results.forEach(function(feature) {
-					if(allHidden) {
-						if(!feature.displayed) {
-							feature.displayed = true;
-							feature.feature = pointService.showFeature(feature);
-						}
-					} else {
-						if(feature.displayed) {
-							feature.displayed = false;
-							feature.feature = pointService.hideFeature(feature.feature);
-						}
-					}
-				});
-			};
-			
-			scope.elevationPath = function(label) {
-				if(!this.feature.feature) {
-					this.feature.feature = pointService.createFeature(this.feature);
-				}
-				pointService.triggerElevationPlot(this.feature.feature[0], label);
-			};
-			
-			function handleResponse(data) {
-				scope.featuresInfo = data;
-				pointService.createLayer();				
-			}
-		}
-	};
-}])
-
-.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
-	var featuresUnderPointUrl = "service/path/featureInfo",
-		layer = null,
-		control = null,
-		esriGeometryMapping = {
-			"esriGeometryPoint"   : {
-				createFeatures : function(geometry) {
-					var point = [geometry.y, geometry.x];
-					return [L.circleMarker(point)];
-				},
-				type : "x,y"
-			},
-			"esriGeometryPolyline": {
-				createFeatures : function(geometry) {
-					var features = [];
-					geometry.paths.forEach(function(path) {
-						var points = [];
-						path.forEach(function(point) {
-							points.push([point[1], point[0]]);
-						});						
-						features.push(L.polyline(points));
-					});
-					return features;
-				},
-				type: "paths"
-			},
-			"esriGeometryPolygon" : {
-				createFeatures : function(geometry) {
-					var polygonGeometry,
-						rings = [];
-					
-					geometry.rings.forEach(function(ring) {
-						var linearRing, polygon, points = [];
-						ring.forEach(function(pointArr) {
-							points.push([pointArr[1], pointArr[0]]);
-						});
-					    rings.push(points);
-					});
-					polygonGeometry = L.multiPolygon(rings);
-					return [polygonGeometry];
-				},
-				type: "rings"
-			}
-		},
-		metaDataUrl = "map/point/pointMetadata.json?v=1",
-		marker = null,
-		clickControl = null,
-		clickListeners = [];
-	
-	return {
-		triggerElevationPlot : function(geometry, label) {
-			var distance = geometry.getLength();
-			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
-		},
-		
-		addMapListener : function(callback, bound) {
-			var alreadyBound = false;
-			clickListeners.forEach(function(obj) {
-				if(obj.callback == callback && obj.bound == bound) {
-					alreadyBound = true;
-				}
-			});
-			if(!alreadyBound) {
-				clickListeners.push({callback : callback, bound : bound});
-			}
-			
-			if(!clickControl) {
-				clickControl = true;
-				mapService.getMap().then(function(map) {
-		            map.on("click", function(e) {
-		               clickListeners.forEach(function(listener) {
-		            	   var callback = listener.callback,
-		            	   		point = {
-		            			   x: e.latlng.lng,
-		            			   y: e.latlng.lat
-		            	   		};
-		            	   
-		            	   point.lat = point.y;
-		            	   point.lng = point.x;
-		                   if(listener.bound) {
-		                	   callback.bind(listener.bound);
-		                   }
-		                   callback(point);
-		                }); 
-		            });
-				});
-			}
-		},
-		
-		getMetaData : function() {
-			return $http.get(metaDataUrl, {cache:true});
-		},
-		
-		moveMarker : function(point) {
-			mapService.getMap().then(function(map) {
-				var size, offset, icon;
-	
-				if(marker) {
-					map.removeLayer(marker);
-				}
-				marker = L.marker(point).addTo(map);
-			});
-			
-		},
-		
-		removeMarker : function() {
-			if(marker) {
-				mapService.getMap().then(function(map) {
-					map.removeLayer(marker);
-					marker = null;					
-				});
-			}			
-		},
-		
-		showPoint : function(point) {
-			$rootScope.$broadcast("map.point.changed", point);
-		},
-		
-		removePoint : function() {
-			$rootScope.$broadcast("map.point.changed", null);
-		},
-		
-		getBehaviour : function(geometryType) {
-			
-		},
-		
-		getInfo : function(point) {
-			return mapService.getMap().then(function(map) {
-				var bounds = map._container.getBoundingClientRect(),
-					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
-					extent = map.getBounds();
-
-				return configService.getConfig("clientSessionId").then(function(id) {			
-					return $http.post(featuresUnderPointUrl, {
-							clientSessionId : id,
-							x:point.x, 
-							y:point.y, 
-							width:bounds.width / ratio, 
-							height:bounds.height / ratio,
-							extent : {
-								left : extent.left,
-								right : extent.right,
-								top: extent.top,
-								bottom: extent.bottom
-					}}).then(function(response) {
-						return response.data;
-					});
-				});
-			});
-		},
-		
-		overFeatures : function(features) {
-			var item;
-			if(!features) {
-				return;
-			}
-			if(angular.isArray(features)) {
-				item = features[0];
-			} else {
-				item = features;
-			}
-			if(item) {
-				item.bringToFront().setStyle({color:"red"});
-			}
-		},
-		
-		outFeatures : function(features) {
-			if(!features) {
-				return;
-			}
-			features.forEach(function(feature) {
-				feature.setStyle({color : '#03f'});
-			}); 			
-		},
-		
-		createLayer : function() {
-			return mapService.getMap().then(function(map) {
-				layer = L.layerGroup();
-				map.addLayer(layer);
-				return layer;
-			});	
-		},
-		
-		removeLayer : function() {		
-			return mapService.getMap().then(function(map) {
-				if(layer) {
-					map.removeLayer(layer);
-				}
-                /* jshint -W093 */
-				return layer = null;
-			});	
-		},
-		
-		createFeature : function(data) {
-			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
-		},
-		
-		showFeature : function(data) {
-			var features = this.createFeature(data);
-			features.forEach(function(feature) {
-				layer.addLayer(feature);				
-			});
-			return features;
-		},
-		
-		hideFeature : function(features) {
-			if(features) {
-				features.forEach(function(feature) {
-					layer.removeLayer(feature);					
-				});
-			}
-		}
-	};
-}])
-
-.filter("dashNull", [function() {
-	return function(value) {
-		if(!value || "Null" == value) {
-			return "-";
-		}
-		return value;
-	};
-}])
-
-.filter("featureGroups", [function() {
-	return function(items) {
-		var groups = [],
-			set = {};
-		if(!items) {
-			return groups;
-		}
-		items.forEach(function(item) {
-			var layerName = item.layerName;
-			if(!set[layerName]) {
-				set[layerName] = true;
-				groups.push(layerName);
-			}
-		});
-		return groups;
-	};
-}])
-
-.filter("filterGroupsByLayername", [function() {
-	return function(items, layerName) {
-		var group = [];
-		if(!items) {
-			return group;
-		}
-		items.forEach(function(item) {
-			if(layerName == item.layerName) {
-				group.push(item);
-			}
-		});
-		return group;
-	};
-}])
-
-
-.controller("OverFeatureCtrl", OverFeatureCtrl);
-
-OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
-function OverFeatureCtrl($filter, pointService) {
-	this.click = function() {
-		console.log("Click");
-	};
-
-	this.mouseenter = function(feature) {
-		console.log("enter");
-		pointService.overFeatures(feature.feature);
-	};
-	
-	this.mouseleave = function(feature) {
-		console.log("leave");
-		pointService.outFeatures(feature.feature);
-	};
-	
-	this.groupEnter = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.overFeatures(feature.feature);
-		});
-	};
-	
-	this.groupLeave = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.outFeatures(feature.feature);
-		});
-	};
-}
-
-})(angular, L, window);
-
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 
 (function(angular, L) {
 
@@ -3965,6 +3487,835 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 
 
 })(angular, L);
+(function () {
+
+    "use strict";
+
+
+    /**
+     * @constant MODES
+     * @type {{VIEW: number, CREATE: number, EDIT: number, DELETE: number, APPEND: number, EDIT_APPEND: number, ALL: number}}
+     */
+    var MODES = {
+        VIEW:        1,
+        CREATE:      2,
+        EDIT:        4,
+        DELETE:      8,
+        APPEND:      16,
+        EDIT_APPEND: 4 | 16,
+        ALL:         1 | 2 | 4 | 8 | 16
+    };
+
+    /**
+     * @module Pather
+     * @author Adam Timberlake
+     * @link https://github.com/Wildhoney/L.Pather
+     */
+    L.Pather = L.FeatureGroup.extend({
+
+        /**
+         * @method initialize
+         * @param {Object} [options={}]
+         * @return {void}
+         */
+        initialize: function initialize(options) {
+
+            this.options       = Object.assign(this.defaultOptions(), options || {});
+            this.creating      = false;
+            this.polylines     = [];
+            this.eventHandlers = [];
+
+        },
+
+        /**
+         * @method createPath
+         * @param {L.LatLng[]} latLngs
+         * @return {L.Pather.Polyline|Boolean}
+         */
+        createPath: function createPath(latLngs) {
+
+            if (latLngs.length <= 1) {
+                return false;
+            }
+
+            this.clearAll();
+
+            var polyline = new L.Pather.Polyline(this.map, latLngs, this.options, {
+                fire: this.fire.bind(this),
+                mode: this.getMode.bind(this),
+                remove: this.removePath.bind(this)
+            });
+
+            this.polylines.push(polyline);
+
+            this.fire('created', {
+                polyline: polyline,
+                latLngs: polyline.getLatLngs()
+            });
+
+            return polyline;
+
+        },
+
+        /**
+         * @method removePath
+         * @param {L.Pather.Polyline} model
+         * @return {Boolean}
+         */
+        removePath: function removePath(model) {
+
+            if (model instanceof L.Pather.Polyline) {
+
+                var indexOf = this.polylines.indexOf(model);
+                this.polylines.splice(indexOf, 1);
+
+                model.softRemove();
+
+                this.fire('deleted', {
+                    polyline: model,
+                    latLngs: []
+                });
+
+                return true;
+
+            }
+
+            return false;
+
+        },
+
+        /**
+         * @method getPaths
+         * @return {Array}
+         */
+        getPaths: function getPolylines() {
+            return this.polylines;
+        },
+
+        /**
+         * @method onAdd
+         * @param {L.Map} map
+         * @return {void}
+         */
+        onAdd: function onAdd(map) {
+
+            var element        = this.element = this.options.element || map.getContainer();
+            this.draggingState = map.dragging._enabled;
+            this.map           = map;
+            this.fromPoint     = { x: 0, y: 0 };
+            this.svg           = d3.select(element)
+                                   .append('svg')
+                                       .attr('pointer-events', 'none')
+                                       .attr('class', this.getOption('moduleClass'))
+                                       .attr('width', this.getOption('width'))
+                                       .attr('height', this.getOption('height'));
+
+            map.dragging.disable();
+
+            // Attach the mouse events for drawing the polyline.
+            this.attachEvents(map);
+            this.setMode(this.options.mode);
+
+        },
+
+        /**
+         * @method onRemove
+         * @return {void}
+         */
+        onRemove: function onRemove() {
+
+            this.svg.remove();
+
+            if (this.options.removePolylines) {
+
+                var length = this.polylines.length;
+
+                while (length--) {
+                    this.removePath(this.polylines[length]);
+                }
+
+            }
+
+            this.map.off('mousedown', this.eventHandlers.mouseDown);
+            this.map.off('mousemove', this.eventHandlers.mouseMove);
+            this.map.off('mouseup',   this.eventHandlers.mouseUp);
+            this.map.getContainer().removeEventListener('mouseleave', this.eventHandlers.mouseLeave);
+
+            this.element.classList.remove('mode-create');
+            this.element.classList.remove('mode-delete');
+            this.element.classList.remove('mode-edit');
+            this.element.classList.remove('mode-append');
+
+            var tileLayer     = this.map.getContainer().querySelector('.leaflet-tile-pane'),
+                originalState = this.draggingState ? 'enable' : 'disable';
+            tileLayer.style.pointerEvents = 'all';
+            this.map.dragging[originalState]();
+
+        },
+
+        /**
+         * @method getEvent
+         * @param {Object} event
+         * @return {Object}
+         */
+        getEvent: function getEvent(event) {
+
+            if (event.touches) {
+                return event.touches[0];
+            }
+
+            return event;
+
+        },
+
+        /**
+         * @method edgeBeingChanged
+         * @return {Array}
+         */
+        edgeBeingChanged: function edgeBeingChanged() {
+
+            var edges = this.polylines.filter(function filter(polyline) {
+                return polyline.manipulating;
+            });
+
+            return edges.length === 0 ? null : edges[0];
+
+        },
+
+        /**
+         * @method isPolylineCreatable
+         * @return {Boolean}
+         */
+        isPolylineCreatable: function isPolylineCreatable() {
+            return !!(this.options.mode & MODES.CREATE);
+        },
+
+        /**
+         * @property events
+         * @type {Object}
+         */
+        events: {
+
+            /**
+             * @method mouseDown
+             * @param {Object} event
+             */
+            mouseDown: function mouseDown(event) {
+
+                event = event.originalEvent || this.getEvent(event);
+
+                var point  = this.map.mouseEventToContainerPoint(event),
+                    latLng = this.map.containerPointToLatLng(point);
+
+                if (this.isPolylineCreatable() && !this.edgeBeingChanged()) {
+
+                    this.creating  = true;
+                    this.fromPoint = this.map.latLngToContainerPoint(latLng);
+                    this.latLngs   = [];
+
+                }
+
+            },
+
+            /**
+             * @method mouseMove
+             * @param {Object} event
+             * @return {void}
+             */
+            mouseMove: function mouseMove(event) {
+
+                event     = event.originalEvent || this.getEvent(event);
+                var point = this.map.mouseEventToContainerPoint(event);
+
+                if (this.edgeBeingChanged()) {
+                    this.edgeBeingChanged().moveTo(this.map.containerPointToLayerPoint(point));
+                    return;
+                }
+
+                var lineFunction = d3.svg.line()
+                    .x(function x(d) { return d.x; })
+                    .y(function y(d) { return d.y; })
+                    .interpolate('linear');
+
+                if (this.creating) {
+
+                    var lineData = [this.fromPoint, new L.Point(point.x, point.y, false)];
+                    this.latLngs.push(point);
+
+                    this.svg.append('path')
+                        .classed(this.getOption('lineClass'), true)
+                        .attr('d', lineFunction(lineData))
+                        .attr('stroke', this.getOption('strokeColour'))
+                        .attr('stroke-width', this.getOption('strokeWidth'))
+                        .attr('fill', 'none');
+
+                    this.fromPoint = { x: point.x, y: point.y };
+
+                }
+
+            },
+
+            /**
+             * @method mouseLeave
+             * @return {void}
+             */
+            mouseLeave: function mouseLeave() {
+                this.clearAll();
+                this.creating = false;
+            },
+
+            /**
+             * @method mouseUp
+             * @return {void}
+             */
+            mouseUp: function mouseup() {
+
+                if (this.creating) {
+
+                    this.creating = false;
+                    this.createPath(this.convertPointsToLatLngs(this.latLngs));
+                    this.latLngs  = [];
+                    return;
+
+                }
+
+                if (this.edgeBeingChanged()) {
+
+                    this.edgeBeingChanged().attachElbows();
+                    this.edgeBeingChanged().finished();
+                    this.edgeBeingChanged().manipulating = false;
+
+                }
+
+            }
+
+        },
+
+        /**
+         * @method attachEvents
+         * @param {L.Map} map
+         * @return {void}
+         */
+        attachEvents: function attachEvents(map) {
+
+            this.eventHandlers = {
+                mouseDown:  this.events.mouseDown.bind(this),
+                mouseMove:  this.events.mouseMove.bind(this),
+                mouseUp:    this.events.mouseUp.bind(this),
+                mouseLeave: this.events.mouseLeave.bind(this)
+            };
+
+            this.map.on('mousedown', this.eventHandlers.mouseDown);
+            this.map.on('mousemove', this.eventHandlers.mouseMove);
+            this.map.on('mouseup', this.eventHandlers.mouseUp);
+            this.map.getContainer().addEventListener('mouseleave', this.eventHandlers.mouseLeave);
+
+            // Attach the mobile events that delegate to the desktop events.
+            this.map.getContainer().addEventListener('touchstart', this.fire.bind(map, 'mousedown'));
+            this.map.getContainer().addEventListener('touchmove', this.fire.bind(map, 'mousemove'));
+            this.map.getContainer().addEventListener('touchend', this.fire.bind(map, 'mouseup'));
+
+        },
+
+        /**
+         * @method convertPointsToLatLngs
+         * @param {Point[]} points
+         * @return {LatLng[]}
+         */
+        convertPointsToLatLngs: function convertPointsToLatLngs(points) {
+
+            return points.map(function map(point) {
+                return this.map.containerPointToLatLng(point);
+            }.bind(this));
+
+        },
+
+        /**
+         * @method clearAll
+         * @return {void}
+         */
+        clearAll: function clearAll() {
+            this.svg.text('');
+        },
+
+        /**
+         * @method getOption
+         * @param {String} property
+         * @return {String|Number}
+         */
+        getOption: function getOption(property) {
+            return this.options[property] || this.defaultOptions()[property];
+        },
+
+        /**
+         * @method defaultOptions
+         * @return {Object}
+         */
+        defaultOptions: function defaultOptions() {
+
+            return {
+                moduleClass: 'pather',
+                lineClass: 'drawing-line',
+                detectTouch: true,
+                elbowClass: 'elbow',
+                removePolylines: true,
+                strokeColour: 'rgba(0,0,0,.5)',
+                strokeWidth: 2,
+                width: '100%',
+                height: '100%',
+                smoothFactor: 10,
+                pathColour: 'black',
+                pathOpacity: 0.55,
+                pathWidth: 3,
+                mode: MODES.ALL
+            };
+
+        },
+
+        /**
+         * @method setSmoothFactor
+         * @param {Number} smoothFactor
+         * @return {void}
+         */
+        setSmoothFactor: function setSmoothFactor(smoothFactor) {
+            this.options.smoothFactor = parseInt(smoothFactor);
+        },
+
+        /**
+         * @method setMode
+         * @param {Number} mode
+         * @return {void}
+         */
+        setMode: function setMode(mode) {
+
+            this.setClassName(mode);
+            this.options.mode = mode;
+
+            var tileLayer = this.map.getContainer().querySelector('.leaflet-tile-pane');
+
+            /**
+             * @method shouldDisableDrag
+             * @return {Boolean}
+             * @see http://www.stucox.com/blog/you-cant-detect-a-touchscreen/
+             */
+            var shouldDisableDrag = function shouldDisableDrag() {
+
+                if (this.detectTouch && ('ontouchstart' in $window || 'onmsgesturechange' in $window)) {
+                    return (this.options.mode & MODES.CREATE || this.options.mode & MODES.EDIT);
+                }
+
+                return (this.options.mode & MODES.CREATE);
+
+            }.bind(this);
+
+            if (shouldDisableDrag()) {
+
+                var originalState = this.draggingState ? 'disable' : 'enable';
+                tileLayer.style.pointerEvents = 'none';
+                return void this.map.dragging[originalState]();
+
+            }
+
+            tileLayer.style.pointerEvents = 'all';
+            this.map.dragging.enable();
+
+        },
+
+        /**
+         * @method setClassName
+         * @param {Number} mode
+         * @return {void}
+         */
+        setClassName: function setClassName(mode) {
+
+            /**
+             * @method conditionallyAppendClassName
+             * @param {String} modeName
+             * @return {void}
+             */
+            var conditionallyAppendClassName = function conditionallyAppendClassName(modeName) {
+
+                var className = ['mode', modeName].join('-');
+
+                if (MODES[modeName.toUpperCase()] & mode) {
+                    return void this.element.classList.add(className);
+                }
+
+                this.element.classList.remove(className);
+
+            }.bind(this);
+
+            conditionallyAppendClassName('create');
+            conditionallyAppendClassName('delete');
+            conditionallyAppendClassName('edit');
+            conditionallyAppendClassName('append');
+        },
+
+        /**
+         * @method getMode
+         * @return {Number}
+         */
+        getMode: function getMode() {
+            return this.options.mode;
+        },
+
+        /**
+         * @method setOptions
+         * @param {Object} options
+         * @return {void}
+         */
+        setOptions: function setOptions(options) {
+            this.options = Object.assign(this.options, options || {});
+        }
+
+    });
+
+    /**
+     * @constant L.Pather.MODE
+     * @type {Object}
+     */
+    L.Pather.MODE = MODES;
+
+    // Simple factory that Leaflet loves to bundle.
+    L.pather = function pather(options) {
+        return new L.Pather(options);
+    };
+
+})(window);
+(function main() {
+
+    "use strict";
+
+    /* jshint ignore:start */
+
+    if (!Object.assign) {
+        Object.defineProperty(Object, 'assign', {
+            enumerable: false,
+            configurable: true,
+            writable: true,
+            value: function(target, firstSource) {
+                'use strict';
+                if (target === undefined || target === null) {
+                    throw new TypeError('Cannot convert first argument to object');
+                }
+
+                var to = Object(target);
+                for (var i = 1; i < arguments.length; i++) {
+                    var nextSource = arguments[i];
+                    if (nextSource === undefined || nextSource === null) {
+                        continue;
+                    }
+                    nextSource = Object(nextSource);
+
+                    var keysArray = Object.keys(Object(nextSource));
+                    for (var nextIndex = 0, len = keysArray.length; nextIndex < len; nextIndex++) {
+                        var nextKey = keysArray[nextIndex];
+                        var desc = Object.getOwnPropertyDescriptor(nextSource, nextKey);
+                        if (desc !== undefined && desc.enumerable) {
+                            to[nextKey] = nextSource[nextKey];
+                        }
+                    }
+                }
+                return to;
+            }
+        });
+    }
+
+    /* jshint ignore:end */
+
+})();
+(function main() {
+
+    "use strict";
+
+    /**
+     * @constant DATA_ATTRIBUTE
+     * @type {String|Symbol}
+     */
+    var DATA_ATTRIBUTE = typeof Symbol === 'undefined' ? '_pather' : Symbol["for"]('pather');
+
+    /**
+     * @module Pather
+     * @submodule Polyline
+     * @param {L.Map} map
+     * @param {L.LatLng[]} latLngs
+     * @param {Object} [options={}]
+     * @param {Object} methods
+     * @return {Polyline}
+     * @constructor
+     */
+    L.Pather.Polyline = function Polyline(map, latLngs, options, methods) {
+
+        this.options = {
+            color:        options.pathColour,
+            opacity:      options.pathOpacity,
+            weight:       options.pathWidth,
+            smoothFactor: options.smoothFactor || 1,
+            elbowClass:   options.elbowClass
+        };
+
+        this.polyline     = new L.Polyline(latLngs, this.options).addTo(map);
+        this.map          = map;
+        this.methods      = methods;
+        this.edges        = [];
+        this.manipulating = false;
+
+        this.attachPolylineEvents(this.polyline);
+        this.select();
+
+    };
+
+    /**
+     * @property prototype
+     * @type {Object}
+     */
+    L.Pather.Polyline.prototype = {
+
+        /**
+         * @method select
+         * @return {void}
+         */
+        select: function select() {
+            this.attachElbows();
+        },
+
+        /**
+         * @method deselect
+         * @return {void}
+         */
+        deselect: function deselect() {
+            this.manipulating = false;
+        },
+
+        /**
+         * @method attachElbows
+         * @return {void}
+         */
+        attachElbows: function attachElbows() {
+
+            this.detachElbows();
+
+            this.polyline._parts[0].forEach(function forEach(point) {
+
+                var divIcon = new L.DivIcon({ className: this.options.elbowClass }),
+                    latLng  = this.map.layerPointToLatLng(point),
+                    edge    = new L.Marker(latLng, { icon: divIcon }).addTo(this.map);
+
+                edge[DATA_ATTRIBUTE] = { point: point };
+                this.attachElbowEvents(edge);
+                this.edges.push(edge);
+
+            }.bind(this));
+
+        },
+
+        /**
+         * @method detachElbows
+         * @return {void}
+         */
+        detachElbows: function detachElbows() {
+
+            this.edges.forEach(function forEach(edge) {
+                this.map.removeLayer(edge);
+            }.bind(this));
+
+            this.edges.length = 0;
+
+        },
+
+        /**
+         * @method attachPolylineEvents
+         * @param {L.Polyline} polyline
+         * @return {void}
+         */
+        attachPolylineEvents: function attachPathEvent(polyline) {
+
+            polyline.on('click', function click(event) {
+
+                event.originalEvent.stopPropagation();
+                event.originalEvent.preventDefault();
+
+                if (this.methods.mode() & L.Pather.MODE.APPEND) {
+
+                    // Appending takes precedence over deletion!
+                    var latLng = this.map.mouseEventToLatLng(event.originalEvent);
+                    this.insertElbow(latLng);
+
+                } else if (this.methods.mode() & L.Pather.MODE.DELETE) {
+                    this.methods.remove(this);
+                }
+
+            }.bind(this));
+
+        },
+
+        /**
+         * @method attachElbowEvents
+         * @param {L.Marker} marker
+         * @return {void}
+         */
+        attachElbowEvents: function attachElbowEvents(marker) {
+
+            marker.on('mousedown', function mousedown(event) {
+
+                event = event.originalEvent || event;
+
+                if (this.methods.mode() & L.Pather.MODE.EDIT) {
+
+                    if (event.stopPropagation) {
+                        event.stopPropagation();
+                        event.preventDefault();
+                    }
+
+                    this.manipulating = marker;
+
+                }
+
+            }.bind(this));
+
+            marker.on('mouseup', function mouseup(event) {
+
+                event = event.originalEvent || event;
+
+                if (event.stopPropagation) {
+                    event.stopPropagation();
+                    event.preventDefault();
+                }
+
+                this.manipulating = false;
+
+            });
+
+            // Attach the mobile events to delegate to the desktop equivalent events.
+            marker._icon.addEventListener('touchstart', marker.fire.bind(marker, 'mousedown'));
+            marker._icon.addEventListener('touchend', marker.fire.bind(marker, 'mouseup'));
+
+        },
+
+        /**
+         * @method insertElbow
+         * @param {L.LatLng} latLng
+         * @return {void}
+         */
+        insertElbow: function insertElbow(latLng) {
+
+            var newPoint      = this.map.latLngToLayerPoint(latLng),
+                leastDistance = Infinity,
+                insertAt      = -1,
+                points        = this.polyline._parts[0];
+
+            points.forEach(function forEach(currentPoint, index) {
+
+                var nextPoint = points[index + 1] || points[0],
+                    distance  = L.LineUtil.pointToSegmentDistance(newPoint, currentPoint, nextPoint);
+
+                if (distance < leastDistance) {
+                    leastDistance = distance;
+                    insertAt      = index;
+                }
+
+            }.bind(this));
+
+            points.splice(insertAt + 1, 0, newPoint);
+
+            var parts = points.map(function map(point) {
+                var latLng = this.map.layerPointToLatLng(point);
+                return { _latlng: latLng };
+            }.bind(this));
+
+            this.redraw(parts);
+            this.attachElbows();
+
+        },
+
+        /**
+         * @method moveTo
+         * @param {L.Point} point
+         * @return {void}
+         */
+        moveTo: function moveTo(point) {
+
+            var latLng = this.map.layerPointToLatLng(point);
+            this.manipulating.setLatLng(latLng);
+            this.redraw(this.edges);
+
+        },
+
+        /**
+         * @method finished
+         * @return {void}
+         */
+        finished: function finished() {
+
+            this.methods.fire('edited', {
+                polyline: this,
+                latLngs: this.getLatLngs()
+            });
+
+        },
+
+        /**
+         * @method redraw
+         * @param {Array} edges
+         * @return {void}
+         */
+        redraw: function redraw(edges) {
+
+            var latLngs = [],
+                options = {};
+
+            edges.forEach(function forEach(edge) {
+                latLngs.push(edge._latlng);
+            });
+
+            Object.keys(this.options).forEach(function forEach(key) {
+                options[key] = this.options[key];
+            }.bind(this));
+
+            options.smoothFactor = 0;
+
+            this.softRemove(false);
+            this.polyline = new L.Polyline(latLngs, options).addTo(this.map);
+            this.attachPolylineEvents(this.polyline);
+
+        },
+
+        /**
+         * @method softRemove
+         * @param {Boolean} [edgesToo=true]
+         * @return {void}
+         */
+        softRemove: function softRemove(edgesToo) {
+
+            edgesToo = typeof edgesToo === 'undefined' ? true : edgesToo;
+
+            this.map.removeLayer(this.polyline);
+
+            if (edgesToo) {
+
+                this.edges.forEach(function forEach(edge) {
+                    this.map.removeLayer(edge);
+                }.bind(this));
+
+            }
+
+        },
+
+        /**
+         * @method getLatLngs
+         * @return {LatLng[]}
+         */
+        getLatLngs: function getLatLngs() {
+
+            return this.polyline._parts[0].map(function map(part) {
+                return this.map.layerPointToLatLng(part);
+            }.bind(this));
+
+        }
+        
+    };
+
+})();
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -5008,892 +5359,483 @@ L.KMLMarker = L.Marker.extend({
 
 
 })(L, Exp);
-(function () {
-
-    "use strict";
-
-
-    /**
-     * @constant MODES
-     * @type {{VIEW: number, CREATE: number, EDIT: number, DELETE: number, APPEND: number, EDIT_APPEND: number, ALL: number}}
-     */
-    var MODES = {
-        VIEW:        1,
-        CREATE:      2,
-        EDIT:        4,
-        DELETE:      8,
-        APPEND:      16,
-        EDIT_APPEND: 4 | 16,
-        ALL:         1 | 2 | 4 | 8 | 16
-    };
-
-    /**
-     * @module Pather
-     * @author Adam Timberlake
-     * @link https://github.com/Wildhoney/L.Pather
-     */
-    L.Pather = L.FeatureGroup.extend({
-
-        /**
-         * @method initialize
-         * @param {Object} [options={}]
-         * @return {void}
-         */
-        initialize: function initialize(options) {
-
-            this.options       = Object.assign(this.defaultOptions(), options || {});
-            this.creating      = false;
-            this.polylines     = [];
-            this.eventHandlers = [];
-
-        },
-
-        /**
-         * @method createPath
-         * @param {L.LatLng[]} latLngs
-         * @return {L.Pather.Polyline|Boolean}
-         */
-        createPath: function createPath(latLngs) {
-
-            if (latLngs.length <= 1) {
-                return false;
-            }
-
-            this.clearAll();
-
-            var polyline = new L.Pather.Polyline(this.map, latLngs, this.options, {
-                fire: this.fire.bind(this),
-                mode: this.getMode.bind(this),
-                remove: this.removePath.bind(this)
-            });
-
-            this.polylines.push(polyline);
-
-            this.fire('created', {
-                polyline: polyline,
-                latLngs: polyline.getLatLngs()
-            });
-
-            return polyline;
-
-        },
-
-        /**
-         * @method removePath
-         * @param {L.Pather.Polyline} model
-         * @return {Boolean}
-         */
-        removePath: function removePath(model) {
-
-            if (model instanceof L.Pather.Polyline) {
-
-                var indexOf = this.polylines.indexOf(model);
-                this.polylines.splice(indexOf, 1);
-
-                model.softRemove();
-
-                this.fire('deleted', {
-                    polyline: model,
-                    latLngs: []
-                });
-
-                return true;
-
-            }
-
-            return false;
-
-        },
-
-        /**
-         * @method getPaths
-         * @return {Array}
-         */
-        getPaths: function getPolylines() {
-            return this.polylines;
-        },
-
-        /**
-         * @method onAdd
-         * @param {L.Map} map
-         * @return {void}
-         */
-        onAdd: function onAdd(map) {
-
-            var element        = this.element = this.options.element || map.getContainer();
-            this.draggingState = map.dragging._enabled;
-            this.map           = map;
-            this.fromPoint     = { x: 0, y: 0 };
-            this.svg           = d3.select(element)
-                                   .append('svg')
-                                       .attr('pointer-events', 'none')
-                                       .attr('class', this.getOption('moduleClass'))
-                                       .attr('width', this.getOption('width'))
-                                       .attr('height', this.getOption('height'));
-
-            map.dragging.disable();
-
-            // Attach the mouse events for drawing the polyline.
-            this.attachEvents(map);
-            this.setMode(this.options.mode);
-
-        },
-
-        /**
-         * @method onRemove
-         * @return {void}
-         */
-        onRemove: function onRemove() {
-
-            this.svg.remove();
-
-            if (this.options.removePolylines) {
-
-                var length = this.polylines.length;
-
-                while (length--) {
-                    this.removePath(this.polylines[length]);
-                }
-
-            }
-
-            this.map.off('mousedown', this.eventHandlers.mouseDown);
-            this.map.off('mousemove', this.eventHandlers.mouseMove);
-            this.map.off('mouseup',   this.eventHandlers.mouseUp);
-            this.map.getContainer().removeEventListener('mouseleave', this.eventHandlers.mouseLeave);
-
-            this.element.classList.remove('mode-create');
-            this.element.classList.remove('mode-delete');
-            this.element.classList.remove('mode-edit');
-            this.element.classList.remove('mode-append');
-
-            var tileLayer     = this.map.getContainer().querySelector('.leaflet-tile-pane'),
-                originalState = this.draggingState ? 'enable' : 'disable';
-            tileLayer.style.pointerEvents = 'all';
-            this.map.dragging[originalState]();
-
-        },
-
-        /**
-         * @method getEvent
-         * @param {Object} event
-         * @return {Object}
-         */
-        getEvent: function getEvent(event) {
-
-            if (event.touches) {
-                return event.touches[0];
-            }
-
-            return event;
-
-        },
-
-        /**
-         * @method edgeBeingChanged
-         * @return {Array}
-         */
-        edgeBeingChanged: function edgeBeingChanged() {
-
-            var edges = this.polylines.filter(function filter(polyline) {
-                return polyline.manipulating;
-            });
-
-            return edges.length === 0 ? null : edges[0];
-
-        },
-
-        /**
-         * @method isPolylineCreatable
-         * @return {Boolean}
-         */
-        isPolylineCreatable: function isPolylineCreatable() {
-            return !!(this.options.mode & MODES.CREATE);
-        },
-
-        /**
-         * @property events
-         * @type {Object}
-         */
-        events: {
-
-            /**
-             * @method mouseDown
-             * @param {Object} event
-             */
-            mouseDown: function mouseDown(event) {
-
-                event = event.originalEvent || this.getEvent(event);
-
-                var point  = this.map.mouseEventToContainerPoint(event),
-                    latLng = this.map.containerPointToLatLng(point);
-
-                if (this.isPolylineCreatable() && !this.edgeBeingChanged()) {
-
-                    this.creating  = true;
-                    this.fromPoint = this.map.latLngToContainerPoint(latLng);
-                    this.latLngs   = [];
-
-                }
-
-            },
-
-            /**
-             * @method mouseMove
-             * @param {Object} event
-             * @return {void}
-             */
-            mouseMove: function mouseMove(event) {
-
-                event     = event.originalEvent || this.getEvent(event);
-                var point = this.map.mouseEventToContainerPoint(event);
-
-                if (this.edgeBeingChanged()) {
-                    this.edgeBeingChanged().moveTo(this.map.containerPointToLayerPoint(point));
-                    return;
-                }
-
-                var lineFunction = d3.svg.line()
-                    .x(function x(d) { return d.x; })
-                    .y(function y(d) { return d.y; })
-                    .interpolate('linear');
-
-                if (this.creating) {
-
-                    var lineData = [this.fromPoint, new L.Point(point.x, point.y, false)];
-                    this.latLngs.push(point);
-
-                    this.svg.append('path')
-                        .classed(this.getOption('lineClass'), true)
-                        .attr('d', lineFunction(lineData))
-                        .attr('stroke', this.getOption('strokeColour'))
-                        .attr('stroke-width', this.getOption('strokeWidth'))
-                        .attr('fill', 'none');
-
-                    this.fromPoint = { x: point.x, y: point.y };
-
-                }
-
-            },
-
-            /**
-             * @method mouseLeave
-             * @return {void}
-             */
-            mouseLeave: function mouseLeave() {
-                this.clearAll();
-                this.creating = false;
-            },
-
-            /**
-             * @method mouseUp
-             * @return {void}
-             */
-            mouseUp: function mouseup() {
-
-                if (this.creating) {
-
-                    this.creating = false;
-                    this.createPath(this.convertPointsToLatLngs(this.latLngs));
-                    this.latLngs  = [];
-                    return;
-
-                }
-
-                if (this.edgeBeingChanged()) {
-
-                    this.edgeBeingChanged().attachElbows();
-                    this.edgeBeingChanged().finished();
-                    this.edgeBeingChanged().manipulating = false;
-
-                }
-
-            }
-
-        },
-
-        /**
-         * @method attachEvents
-         * @param {L.Map} map
-         * @return {void}
-         */
-        attachEvents: function attachEvents(map) {
-
-            this.eventHandlers = {
-                mouseDown:  this.events.mouseDown.bind(this),
-                mouseMove:  this.events.mouseMove.bind(this),
-                mouseUp:    this.events.mouseUp.bind(this),
-                mouseLeave: this.events.mouseLeave.bind(this)
-            };
-
-            this.map.on('mousedown', this.eventHandlers.mouseDown);
-            this.map.on('mousemove', this.eventHandlers.mouseMove);
-            this.map.on('mouseup', this.eventHandlers.mouseUp);
-            this.map.getContainer().addEventListener('mouseleave', this.eventHandlers.mouseLeave);
-
-            // Attach the mobile events that delegate to the desktop events.
-            this.map.getContainer().addEventListener('touchstart', this.fire.bind(map, 'mousedown'));
-            this.map.getContainer().addEventListener('touchmove', this.fire.bind(map, 'mousemove'));
-            this.map.getContainer().addEventListener('touchend', this.fire.bind(map, 'mouseup'));
-
-        },
-
-        /**
-         * @method convertPointsToLatLngs
-         * @param {Point[]} points
-         * @return {LatLng[]}
-         */
-        convertPointsToLatLngs: function convertPointsToLatLngs(points) {
-
-            return points.map(function map(point) {
-                return this.map.containerPointToLatLng(point);
-            }.bind(this));
-
-        },
-
-        /**
-         * @method clearAll
-         * @return {void}
-         */
-        clearAll: function clearAll() {
-            this.svg.text('');
-        },
-
-        /**
-         * @method getOption
-         * @param {String} property
-         * @return {String|Number}
-         */
-        getOption: function getOption(property) {
-            return this.options[property] || this.defaultOptions()[property];
-        },
-
-        /**
-         * @method defaultOptions
-         * @return {Object}
-         */
-        defaultOptions: function defaultOptions() {
-
-            return {
-                moduleClass: 'pather',
-                lineClass: 'drawing-line',
-                detectTouch: true,
-                elbowClass: 'elbow',
-                removePolylines: true,
-                strokeColour: 'rgba(0,0,0,.5)',
-                strokeWidth: 2,
-                width: '100%',
-                height: '100%',
-                smoothFactor: 10,
-                pathColour: 'black',
-                pathOpacity: 0.55,
-                pathWidth: 3,
-                mode: MODES.ALL
-            };
-
-        },
-
-        /**
-         * @method setSmoothFactor
-         * @param {Number} smoothFactor
-         * @return {void}
-         */
-        setSmoothFactor: function setSmoothFactor(smoothFactor) {
-            this.options.smoothFactor = parseInt(smoothFactor);
-        },
-
-        /**
-         * @method setMode
-         * @param {Number} mode
-         * @return {void}
-         */
-        setMode: function setMode(mode) {
-
-            this.setClassName(mode);
-            this.options.mode = mode;
-
-            var tileLayer = this.map.getContainer().querySelector('.leaflet-tile-pane');
-
-            /**
-             * @method shouldDisableDrag
-             * @return {Boolean}
-             * @see http://www.stucox.com/blog/you-cant-detect-a-touchscreen/
-             */
-            var shouldDisableDrag = function shouldDisableDrag() {
-
-                if (this.detectTouch && ('ontouchstart' in $window || 'onmsgesturechange' in $window)) {
-                    return (this.options.mode & MODES.CREATE || this.options.mode & MODES.EDIT);
-                }
-
-                return (this.options.mode & MODES.CREATE);
-
-            }.bind(this);
-
-            if (shouldDisableDrag()) {
-
-                var originalState = this.draggingState ? 'disable' : 'enable';
-                tileLayer.style.pointerEvents = 'none';
-                return void this.map.dragging[originalState]();
-
-            }
-
-            tileLayer.style.pointerEvents = 'all';
-            this.map.dragging.enable();
-
-        },
-
-        /**
-         * @method setClassName
-         * @param {Number} mode
-         * @return {void}
-         */
-        setClassName: function setClassName(mode) {
-
-            /**
-             * @method conditionallyAppendClassName
-             * @param {String} modeName
-             * @return {void}
-             */
-            var conditionallyAppendClassName = function conditionallyAppendClassName(modeName) {
-
-                var className = ['mode', modeName].join('-');
-
-                if (MODES[modeName.toUpperCase()] & mode) {
-                    return void this.element.classList.add(className);
-                }
-
-                this.element.classList.remove(className);
-
-            }.bind(this);
-
-            conditionallyAppendClassName('create');
-            conditionallyAppendClassName('delete');
-            conditionallyAppendClassName('edit');
-            conditionallyAppendClassName('append');
-        },
-
-        /**
-         * @method getMode
-         * @return {Number}
-         */
-        getMode: function getMode() {
-            return this.options.mode;
-        },
-
-        /**
-         * @method setOptions
-         * @param {Object} options
-         * @return {void}
-         */
-        setOptions: function setOptions(options) {
-            this.options = Object.assign(this.options, options || {});
-        }
-
-    });
-
-    /**
-     * @constant L.Pather.MODE
-     * @type {Object}
-     */
-    L.Pather.MODE = MODES;
-
-    // Simple factory that Leaflet loves to bundle.
-    L.pather = function pather(options) {
-        return new L.Pather(options);
-    };
-
-})(window);
-(function main() {
-
-    "use strict";
-
-    /* jshint ignore:start */
-
-    if (!Object.assign) {
-        Object.defineProperty(Object, 'assign', {
-            enumerable: false,
-            configurable: true,
-            writable: true,
-            value: function(target, firstSource) {
-                'use strict';
-                if (target === undefined || target === null) {
-                    throw new TypeError('Cannot convert first argument to object');
-                }
-
-                var to = Object(target);
-                for (var i = 1; i < arguments.length; i++) {
-                    var nextSource = arguments[i];
-                    if (nextSource === undefined || nextSource === null) {
-                        continue;
-                    }
-                    nextSource = Object(nextSource);
-
-                    var keysArray = Object.keys(Object(nextSource));
-                    for (var nextIndex = 0, len = keysArray.length; nextIndex < len; nextIndex++) {
-                        var nextKey = keysArray[nextIndex];
-                        var desc = Object.getOwnPropertyDescriptor(nextSource, nextKey);
-                        if (desc !== undefined && desc.enumerable) {
-                            to[nextKey] = nextSource[nextKey];
-                        }
-                    }
-                }
-                return to;
-            }
-        });
-    }
-
-    /* jshint ignore:end */
-
-})();
-(function main() {
-
-    "use strict";
-
-    /**
-     * @constant DATA_ATTRIBUTE
-     * @type {String|Symbol}
-     */
-    var DATA_ATTRIBUTE = typeof Symbol === 'undefined' ? '_pather' : Symbol["for"]('pather');
-
-    /**
-     * @module Pather
-     * @submodule Polyline
-     * @param {L.Map} map
-     * @param {L.LatLng[]} latLngs
-     * @param {Object} [options={}]
-     * @param {Object} methods
-     * @return {Polyline}
-     * @constructor
-     */
-    L.Pather.Polyline = function Polyline(map, latLngs, options, methods) {
-
-        this.options = {
-            color:        options.pathColour,
-            opacity:      options.pathOpacity,
-            weight:       options.pathWidth,
-            smoothFactor: options.smoothFactor || 1,
-            elbowClass:   options.elbowClass
-        };
-
-        this.polyline     = new L.Polyline(latLngs, this.options).addTo(map);
-        this.map          = map;
-        this.methods      = methods;
-        this.edges        = [];
-        this.manipulating = false;
-
-        this.attachPolylineEvents(this.polyline);
-        this.select();
-
-    };
-
-    /**
-     * @property prototype
-     * @type {Object}
-     */
-    L.Pather.Polyline.prototype = {
-
-        /**
-         * @method select
-         * @return {void}
-         */
-        select: function select() {
-            this.attachElbows();
-        },
-
-        /**
-         * @method deselect
-         * @return {void}
-         */
-        deselect: function deselect() {
-            this.manipulating = false;
-        },
-
-        /**
-         * @method attachElbows
-         * @return {void}
-         */
-        attachElbows: function attachElbows() {
-
-            this.detachElbows();
-
-            this.polyline._parts[0].forEach(function forEach(point) {
-
-                var divIcon = new L.DivIcon({ className: this.options.elbowClass }),
-                    latLng  = this.map.layerPointToLatLng(point),
-                    edge    = new L.Marker(latLng, { icon: divIcon }).addTo(this.map);
-
-                edge[DATA_ATTRIBUTE] = { point: point };
-                this.attachElbowEvents(edge);
-                this.edges.push(edge);
-
-            }.bind(this));
-
-        },
-
-        /**
-         * @method detachElbows
-         * @return {void}
-         */
-        detachElbows: function detachElbows() {
-
-            this.edges.forEach(function forEach(edge) {
-                this.map.removeLayer(edge);
-            }.bind(this));
-
-            this.edges.length = 0;
-
-        },
-
-        /**
-         * @method attachPolylineEvents
-         * @param {L.Polyline} polyline
-         * @return {void}
-         */
-        attachPolylineEvents: function attachPathEvent(polyline) {
-
-            polyline.on('click', function click(event) {
-
-                event.originalEvent.stopPropagation();
-                event.originalEvent.preventDefault();
-
-                if (this.methods.mode() & L.Pather.MODE.APPEND) {
-
-                    // Appending takes precedence over deletion!
-                    var latLng = this.map.mouseEventToLatLng(event.originalEvent);
-                    this.insertElbow(latLng);
-
-                } else if (this.methods.mode() & L.Pather.MODE.DELETE) {
-                    this.methods.remove(this);
-                }
-
-            }.bind(this));
-
-        },
-
-        /**
-         * @method attachElbowEvents
-         * @param {L.Marker} marker
-         * @return {void}
-         */
-        attachElbowEvents: function attachElbowEvents(marker) {
-
-            marker.on('mousedown', function mousedown(event) {
-
-                event = event.originalEvent || event;
-
-                if (this.methods.mode() & L.Pather.MODE.EDIT) {
-
-                    if (event.stopPropagation) {
-                        event.stopPropagation();
-                        event.preventDefault();
-                    }
-
-                    this.manipulating = marker;
-
-                }
-
-            }.bind(this));
-
-            marker.on('mouseup', function mouseup(event) {
-
-                event = event.originalEvent || event;
-
-                if (event.stopPropagation) {
-                    event.stopPropagation();
-                    event.preventDefault();
-                }
-
-                this.manipulating = false;
-
-            });
-
-            // Attach the mobile events to delegate to the desktop equivalent events.
-            marker._icon.addEventListener('touchstart', marker.fire.bind(marker, 'mousedown'));
-            marker._icon.addEventListener('touchend', marker.fire.bind(marker, 'mouseup'));
-
-        },
-
-        /**
-         * @method insertElbow
-         * @param {L.LatLng} latLng
-         * @return {void}
-         */
-        insertElbow: function insertElbow(latLng) {
-
-            var newPoint      = this.map.latLngToLayerPoint(latLng),
-                leastDistance = Infinity,
-                insertAt      = -1,
-                points        = this.polyline._parts[0];
-
-            points.forEach(function forEach(currentPoint, index) {
-
-                var nextPoint = points[index + 1] || points[0],
-                    distance  = L.LineUtil.pointToSegmentDistance(newPoint, currentPoint, nextPoint);
-
-                if (distance < leastDistance) {
-                    leastDistance = distance;
-                    insertAt      = index;
-                }
-
-            }.bind(this));
-
-            points.splice(insertAt + 1, 0, newPoint);
-
-            var parts = points.map(function map(point) {
-                var latLng = this.map.layerPointToLatLng(point);
-                return { _latlng: latLng };
-            }.bind(this));
-
-            this.redraw(parts);
-            this.attachElbows();
-
-        },
-
-        /**
-         * @method moveTo
-         * @param {L.Point} point
-         * @return {void}
-         */
-        moveTo: function moveTo(point) {
-
-            var latLng = this.map.layerPointToLatLng(point);
-            this.manipulating.setLatLng(latLng);
-            this.redraw(this.edges);
-
-        },
-
-        /**
-         * @method finished
-         * @return {void}
-         */
-        finished: function finished() {
-
-            this.methods.fire('edited', {
-                polyline: this,
-                latLngs: this.getLatLngs()
-            });
-
-        },
-
-        /**
-         * @method redraw
-         * @param {Array} edges
-         * @return {void}
-         */
-        redraw: function redraw(edges) {
-
-            var latLngs = [],
-                options = {};
-
-            edges.forEach(function forEach(edge) {
-                latLngs.push(edge._latlng);
-            });
-
-            Object.keys(this.options).forEach(function forEach(key) {
-                options[key] = this.options[key];
-            }.bind(this));
-
-            options.smoothFactor = 0;
-
-            this.softRemove(false);
-            this.polyline = new L.Polyline(latLngs, options).addTo(this.map);
-            this.attachPolylineEvents(this.polyline);
-
-        },
-
-        /**
-         * @method softRemove
-         * @param {Boolean} [edgesToo=true]
-         * @return {void}
-         */
-        softRemove: function softRemove(edgesToo) {
-
-            edgesToo = typeof edgesToo === 'undefined' ? true : edgesToo;
-
-            this.map.removeLayer(this.polyline);
-
-            if (edgesToo) {
-
-                this.edges.forEach(function forEach(edge) {
-                    this.map.removeLayer(edge);
-                }.bind(this));
-
-            }
-
-        },
-
-        /**
-         * @method getLatLngs
-         * @return {LatLng[]}
-         */
-        getLatLngs: function getLatLngs() {
-
-            return this.polyline._parts[0].map(function map(part) {
-                return this.map.layerPointToLatLng(part);
-            }.bind(this));
-
-        }
-        
-    };
-
-})();
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-
-(function(L) {
-
+(function(angular, L, window) {
 'use strict';
 
-L.Control.Features = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-location-arrow fa-rotate-180',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
-	    this._container.title = "Show features under point";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
+angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 
-        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(e) {
-	        
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	map.fireEvent("featuresactivate", e);
-	        	L.DomUtil.addClass(this, 'active');
-	        } else {
-	        	map.fireEvent("featuresdeactivate", e);
-	        	L.DomUtil.removeClass(this, 'active');
+.directive("expPoint", ['pointService', function(pointService) {
+	return {
+		scope : {
+			data : "=point"
+		},		
+		controller : ['$scope', function($scope) {
+			$scope.$watch("data", function(newData, oldData) {
+				if(newData || oldData) {
+					pointService.showPoint($scope.data);
+				}
+			});
+		}]
+	};
+}])
+
+.directive("expClickMapPoint", ['pointService', function(pointService) {
+	return {
+		restrict:'AE',
+		scope : {
+		},		
+		link : function(scope, element) {
+			pointService.addMapListener(function(latlon) {
+				pointService.showPoint(latlon);
+			}, this);
+		}
+	};
+}])
+
+.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
+	var defaultOptions = {
+			actions : [],
+			visible : true,
+			modal : false,
+			minWidth : 240,
+			title : "Features within approx 2km",
+			position : {top:140, left:40}
+		};
+	
+	return {
+		restrict:"AE",
+		templateUrl : "map/point/point.html?v=2.7",
+		scope :true,
+		controller : ['$scope', function($scope) {
+			if($scope.options) {
+				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
+			} else {
+				$scope.windowOptions = angular.extend({}, defaultOptions);
 			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
+		}],
+		link : function(scope, element) {
+			console.log("Id = ", scope.$id);
+			// This things is a one shot wonder so we listen for an event.
+			$rootScope.$on("map.point.changed", function(event, point) {
+				scope.point = point;
+				pointService.removeLayer();
+				if(typeof point != "undefined" && point) {
+					scope.changePoint(point);
+					pointService.getMetaData().then(function(response) {
+						scope.metadata = response.data;
+					});
+				}
+			});
+			
+			scope.createTitle = function() {
+				var oneItem = !this.greaterThanOneItem(),
+					layerName = this.feature.layerName,
+					metadata = this.metadata[layerName],
+					preferredLabel = metadata.preferredLabel,
+					value = this.feature.attributes[preferredLabel];
+				
+				if(!oneItem && value && value != "Null") {
+					return value;
+				} else {
+					return metadata.label;
+				}				
+			};
+			
+			scope.changePoint = function(newValue) {
+				pointService.moveMarker(newValue);
+				if(newValue) {
+					pointService.getInfo(newValue).then(function(data) {
+						handleResponse(data);
+					});
+				}
+				pointService.removeLayer();
+			};
+			
+			scope.clearPoint = function() {
+				scope.point = false;
+				pointService.removeLayer();
+				pointService.removeMarker();
+			};
+			
+			scope.toggleShow = function() {
+				this.feature.displayed = !this.feature.displayed;
+				if(this.feature.displayed) {
+					this.feature.feature = pointService.showFeature(this.feature);
+				} else {
+					pointService.hideFeature(this.feature.feature);
+					this.feature.layer = null;
+				}
+			};			
+			
+			scope.oneShowing = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				return oneShown;
+			};
+			
+			scope.greaterThanOneItem = function() {
+				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
+			};
+			
+			scope.groupShow = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				
+				group.forEach(function(feature) {
+					if(oneShown) {
+						feature.feature = pointService.hideFeature(feature.feature);
+						feature.displayed = false;
+					} else {
+						feature.feature = pointService.showFeature(feature);
+						feature.displayed = true;
+					}
+				});
+			};			
+			
+			scope.allHidden = function() {
+				var allHidden = true;
+				if(this.featuresInfo && this.featuresInfo.results) {
+					this.featuresInfo.results.forEach(function(feature) {
+						allHidden &= !feature.displayed;
+					});
+				}
+				return allHidden;
+			};
+			
+			scope.toggleAll = function() {
+				var allHidden = scope.allHidden();
+				this.featuresInfo.results.forEach(function(feature) {
+					if(allHidden) {
+						if(!feature.displayed) {
+							feature.displayed = true;
+							feature.feature = pointService.showFeature(feature);
+						}
+					} else {
+						if(feature.displayed) {
+							feature.displayed = false;
+							feature.feature = pointService.hideFeature(feature.feature);
+						}
+					}
+				});
+			};
+			
+			scope.elevationPath = function(label) {
+				if(!this.feature.feature) {
+					this.feature.feature = pointService.createFeature(this.feature);
+				}
+				pointService.triggerElevationPlot(this.feature.feature[0], label);
+			};
+			
+			function handleResponse(data) {
+				scope.featuresInfo = data;
+				pointService.createLayer();				
+			}
+		}
+	};
+}])
 
-L.control.features = function (options) {
-	return new L.Control.Features(options);
-};
+.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
+	var featuresUnderPointUrl = "service/path/featureInfo",
+		layer = null,
+		control = null,
+		esriGeometryMapping = {
+			"esriGeometryPoint"   : {
+				createFeatures : function(geometry) {
+					var point = [geometry.y, geometry.x];
+					return [L.circleMarker(point)];
+				},
+				type : "x,y"
+			},
+			"esriGeometryPolyline": {
+				createFeatures : function(geometry) {
+					var features = [];
+					geometry.paths.forEach(function(path) {
+						var points = [];
+						path.forEach(function(point) {
+							points.push([point[1], point[0]]);
+						});						
+						features.push(L.polyline(points));
+					});
+					return features;
+				},
+				type: "paths"
+			},
+			"esriGeometryPolygon" : {
+				createFeatures : function(geometry) {
+					var polygonGeometry,
+						rings = [];
+					
+					geometry.rings.forEach(function(ring) {
+						var linearRing, polygon, points = [];
+						ring.forEach(function(pointArr) {
+							points.push([pointArr[1], pointArr[0]]);
+						});
+					    rings.push(points);
+					});
+					polygonGeometry = L.multiPolygon(rings);
+					return [polygonGeometry];
+				},
+				type: "rings"
+			}
+		},
+		metaDataUrl = "map/point/pointMetadata.json?v=1",
+		marker = null,
+		clickControl = null,
+		clickListeners = [];
 	
-})(L);
+	return {
+		triggerElevationPlot : function(geometry, label) {
+			var distance = geometry.getLength();
+			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
+		},
+		
+		addMapListener : function(callback, bound) {
+			var alreadyBound = false;
+			clickListeners.forEach(function(obj) {
+				if(obj.callback == callback && obj.bound == bound) {
+					alreadyBound = true;
+				}
+			});
+			if(!alreadyBound) {
+				clickListeners.push({callback : callback, bound : bound});
+			}
+			
+			if(!clickControl) {
+				clickControl = true;
+				mapService.getMap().then(function(map) {
+		            map.on("click", function(e) {
+		               clickListeners.forEach(function(listener) {
+		            	   var callback = listener.callback,
+		            	   		point = {
+		            			   x: e.latlng.lng,
+		            			   y: e.latlng.lat
+		            	   		};
+		            	   
+		            	   point.lat = point.y;
+		            	   point.lng = point.x;
+		                   if(listener.bound) {
+		                	   callback.bind(listener.bound);
+		                   }
+		                   callback(point);
+		                }); 
+		            });
+				});
+			}
+		},
+		
+		getMetaData : function() {
+			return $http.get(metaDataUrl, {cache:true});
+		},
+		
+		moveMarker : function(point) {
+			mapService.getMap().then(function(map) {
+				var size, offset, icon;
+	
+				if(marker) {
+					map.removeLayer(marker);
+				}
+				marker = L.marker(point).addTo(map);
+			});
+			
+		},
+		
+		removeMarker : function() {
+			if(marker) {
+				mapService.getMap().then(function(map) {
+					map.removeLayer(marker);
+					marker = null;					
+				});
+			}			
+		},
+		
+		showPoint : function(point) {
+			$rootScope.$broadcast("map.point.changed", point);
+		},
+		
+		removePoint : function() {
+			$rootScope.$broadcast("map.point.changed", null);
+		},
+		
+		getBehaviour : function(geometryType) {
+			
+		},
+		
+		getInfo : function(point) {
+			return mapService.getMap().then(function(map) {
+				var bounds = map._container.getBoundingClientRect(),
+					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
+					extent = map.getBounds();
+
+				return configService.getConfig("clientSessionId").then(function(id) {			
+					return $http.post(featuresUnderPointUrl, {
+							clientSessionId : id,
+							x:point.x, 
+							y:point.y, 
+							width:bounds.width / ratio, 
+							height:bounds.height / ratio,
+							extent : {
+								left : extent.left,
+								right : extent.right,
+								top: extent.top,
+								bottom: extent.bottom
+					}}).then(function(response) {
+						return response.data;
+					});
+				});
+			});
+		},
+		
+		overFeatures : function(features) {
+			var item;
+			if(!features) {
+				return;
+			}
+			if(angular.isArray(features)) {
+				item = features[0];
+			} else {
+				item = features;
+			}
+			if(item) {
+				item.bringToFront().setStyle({color:"red"});
+			}
+		},
+		
+		outFeatures : function(features) {
+			if(!features) {
+				return;
+			}
+			features.forEach(function(feature) {
+				feature.setStyle({color : '#03f'});
+			}); 			
+		},
+		
+		createLayer : function() {
+			return mapService.getMap().then(function(map) {
+				layer = L.layerGroup();
+				map.addLayer(layer);
+				return layer;
+			});	
+		},
+		
+		removeLayer : function() {		
+			return mapService.getMap().then(function(map) {
+				if(layer) {
+					map.removeLayer(layer);
+				}
+                /* jshint -W093 */
+				return layer = null;
+			});	
+		},
+		
+		createFeature : function(data) {
+			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
+		},
+		
+		showFeature : function(data) {
+			var features = this.createFeature(data);
+			features.forEach(function(feature) {
+				layer.addLayer(feature);				
+			});
+			return features;
+		},
+		
+		hideFeature : function(features) {
+			if(features) {
+				features.forEach(function(feature) {
+					layer.removeLayer(feature);					
+				});
+			}
+		}
+	};
+}])
+
+.filter("dashNull", [function() {
+	return function(value) {
+		if(!value || "Null" == value) {
+			return "-";
+		}
+		return value;
+	};
+}])
+
+.filter("featureGroups", [function() {
+	return function(items) {
+		var groups = [],
+			set = {};
+		if(!items) {
+			return groups;
+		}
+		items.forEach(function(item) {
+			var layerName = item.layerName;
+			if(!set[layerName]) {
+				set[layerName] = true;
+				groups.push(layerName);
+			}
+		});
+		return groups;
+	};
+}])
+
+.filter("filterGroupsByLayername", [function() {
+	return function(items, layerName) {
+		var group = [];
+		if(!items) {
+			return group;
+		}
+		items.forEach(function(item) {
+			if(layerName == item.layerName) {
+				group.push(item);
+			}
+		});
+		return group;
+	};
+}])
+
+
+.controller("OverFeatureCtrl", OverFeatureCtrl);
+
+OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
+function OverFeatureCtrl($filter, pointService) {
+	this.click = function() {
+		console.log("Click");
+	};
+
+	this.mouseenter = function(feature) {
+		console.log("enter");
+		pointService.overFeatures(feature.feature);
+	};
+	
+	this.mouseleave = function(feature) {
+		console.log("leave");
+		pointService.outFeatures(feature.feature);
+	};
+	
+	this.groupEnter = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.overFeatures(feature.feature);
+		});
+	};
+	
+	this.groupLeave = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.outFeatures(feature.feature);
+		});
+	};
+}
+
+})(angular, L, window);
 
 /*
  * Google layer using Google Maps API
@@ -6095,71 +6037,6 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Legend = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-list',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
-	    this._container.title = "Show legend";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent
-	            .on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(){
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	this._legend = L.control({position: 'topleft'});
-
-	        	this._legend.onAdd = function (map) {
-	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
-					html = '<img src="resources/img/mapkey_topo2.png"></img>';
-
-	        		div.innerHTML = html;
-	        		return div;
-	        	};
-	        	map.addControl(this._legend);
-	        } else {
-	        	map.removeControl(this._legend);
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.legend = function (options) {
-	return new L.Control.Legend(options);
-};
-	
-})(L);
-
 L.Control.MousePosition = L.Control.extend({
   options: {
     position: 'bottomleft',
@@ -6339,6 +6216,129 @@ L.Control.Zoomout = L.Control.extend({
 L.control.zoomout = function (options) {
   return new L.Control.Zoomout(options);
 };
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
+L.Control.Legend = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-list',
+	    modal: false
+	},
+	
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
+	    this._container.title = "Show legend";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent
+	            .on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(){
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	this._legend = L.control({position: 'topleft'});
+
+	        	this._legend.onAdd = function (map) {
+	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
+					html = '<img src="resources/img/mapkey_topo2.png"></img>';
+
+	        		div.innerHTML = html;
+	        		return div;
+	        	};
+	        	map.addControl(this._legend);
+	        } else {
+	        	map.removeControl(this._legend);
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.legend = function (options) {
+	return new L.Control.Legend(options);
+};
+	
+})(L);
+
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
+L.Control.Features = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-location-arrow fa-rotate-180',
+	    modal: false
+	},
+	
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
+	    this._container.title = "Show features under point";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(e) {
+	        
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	map.fireEvent("featuresactivate", e);
+	        	L.DomUtil.addClass(this, 'active');
+	        } else {
+	        	map.fireEvent("featuresdeactivate", e);
+	        	L.DomUtil.removeClass(this, 'active');
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.features = function (options) {
+	return new L.Control.Features(options);
+};
+	
+})(L);
+
 angular.module("exp.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/addroute/routeManager.html","<div>\r\n	<div ng-repeat=\"route in routes\" ng-title=\"{{route.description}}\">\r\n		<i class=\"fa\" ng-class=\"{\'fa-road\':route.type == \'ROAD\', \'rail\':route.type == \'RAIL\', \'power\':route.type == \'POWERLINE\', \'pipe\':route.type == \'PIPELINE\'}\"\r\n			title=\"{{route.type == \'ROAD\'?\'Road\':route.type == \'RAIL\'?\'Rail line\' :route.type == \'POWERLINE\'?\'Power line\' :route.type == \'PIPELINE\'?\'Pipe line\':\'\'}}\"></i>\r\n		<span class=\"ellipsis\" style=\"width:18em;\" ng-mouseenter=\"mouseenter()\" ng-mouseleave=\"mouseleave()\">{{route.name}}</span>\r\n		<div style=\"float:right\">\r\n			<a class=\"featureLink\" href=\"javascript:;\" title=\"Plot feature\'s elevation\" \r\n				ng-click=\"showElevation()\"><i class=\"fa fa-align-left fa-rotate-270\"></i></a>\r\n			<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\" \r\n				ng-click=\"toggleRoute()\"><i class=\"fa\" ng-class=\"{\'fa-eye\':(!route.showing), \'fa-eye-slash\':route.showing}\"></i></a>\r\n			<a class=\"featureLink\" href=\"javascript:;\" title=\"Pan map to feature\" \r\n				ng-click=\"panToVector()\"><i class=\"fa fa-flag\"></i></a>		\r\n			<a href=\"javascript:\" exp-confirm=\"\'Are you sure that you want to delete this route?\'\" success=\"removeRoute()\" title=\"Remove route from collection.\">\r\n				<i class=\"fa fa-remove\" title=\"Remove this route from your added routes.\"></i>\r\n			</a>						\r\n		</div>\r\n	</div>\r\n	\r\n</div>\r\n<div>\r\n	<button type=\"button\" class=\"btn btn-default\" style=\"margin:2px;width:100%\" ng-hide=\"addRoute\" ng-click=\"showAddRoute()\">Add infrastructure route</button>\r\n	<div ng-show=\"addRoute\" class=\"addRoute\">\r\n		<div>\r\n			<label for=\"addRouteType\">Type</label>\r\n			<select ng-model=\"newRoute.type\" ng-options=\"k as v for (k,v) in types\"></select>\r\n		</div>\r\n		<div>\r\n			<label for=\"addRouteName\">Name</label>\r\n			<input type=\"text\" ng-model=\"newRoute.name\" id=\"addRouteName\" required=\"required\"/>\r\n		</div>\r\n		<div>\r\n			<label for=\"addRouteDescription\">Description</label>\r\n			<input type=\"text\" ng-model=\"newRoute.description\" id=\"addRouteDescription\"/>\r\n		</div>\r\n		<div>\r\n			<label for=\"routeWktAdded\">Path drawn</label>\r\n			<i class=\"fa fa-check\" style=\"font-size:120%; color:lightgreen\" ng-show=\"newRoute.wkt\"></i>\r\n			<span ng-hide=\"newRoute.wkt\" style=\"border:1px solid #eb0d0a;padding:2px\">Click map for points. Double click to complete</span>\r\n		</div>\r\n	</div>\r\n	<div ng-show=\"addRoute\" style=\"text-align: right;\">\r\n		<button type=\"button\" class=\"btn btn-default\" style=\"width:6em\" ng-click=\"cancelRoute()\">Cancel</button>\r\n		<button type=\"button\" class=\"btn btn-default\" style=\"width:6em\" ng-click=\"saveRoute()\" ng-disabled=\"!(newRoute.type && newRoute.name && newRoute.wkt)\">Save</button>\r\n	</div>\r\n</div>\r\n</div>\r\n");
 $templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\r\n	<span id=\"baselayerCtrl\">\r\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\r\n	</span>\r\n</span>");
 $templateCache.put("map/clip/clip.html","<div mars-rfc-selector hide=\"noRfcSelector\" extent=\"extent\" selector=\"rfcSelector\" ng-show=\"rfcSelector\"></div>\r\n");

@@ -10,7 +10,6 @@
   ],
   "main": [
     "dist/ga-explorer-map.js",
-    "dist/ga-explorer-map.min.js",
     "dist/ga-explorer-map.css"
   ],
   "repository": {
