@@ -1042,6 +1042,108 @@ angular.module("geo.draw", ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(L) {
+
+'use strict';	
+
+L.Control.Legend = L.Control.extend({
+    _active: false,
+    _map: null,
+    includes: L.Mixin.Events,
+    options: {
+        position: 'topleft',
+        className: 'fa fa-search-minus',
+        modal: false
+    },
+    onAdd: function (map) {
+        this._map = map;
+        this._container = L.DomUtil.create('div', 'leaflet-zoom-box-control leaflet-bar');
+        this._container.title = "Zoom out";
+        var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        map.on('zoomend', function(){
+            if (map.getZoom() == map.getMaxZoom()){
+                L.DomUtil.addClass(link, 'leaflet-disabled');
+            }
+            else {
+                L.DomUtil.removeClass(link, 'leaflet-disabled');
+            }
+        }, this);
+        map.on('boxzoomend', this.deactivate, this);
+
+        L.DomEvent
+            .on(this._container, 'dblclick', L.DomEvent.stop)
+            .on(this._container, 'click', L.DomEvent.stop)
+            .on(this._container, 'click', function(){
+                this._active = !this._active;
+
+				var newZoom, zoom = map.getZoom();
+				if(zoom <= map.getMinZoom()) {
+					return;
+				} 				
+				if(zoom < 10) {
+					newZoom = zoom - 1;
+				} else if(zoom < 13) {
+					newZoom = zoom - 2;
+				} else {
+					newZoom = zoom - 3;
+				}
+				map.setZoom(newZoom);				
+            }, this);
+        return this._container;
+    },
+    activate: function() {
+        L.DomUtil.addClass(this._container, 'active');
+    },
+    deactivate: function() {
+        L.DomUtil.removeClass(this._container, 'active');
+        this._active = false;
+    }
+});
+
+L.control.zoomout = function (options) {
+  return new L.Control.Zoomout(options);
+};
+
+
+
+
+var populationLegend = L.control({position: 'bottomright'});
+var populationChangeLegend = L.control({position: 'bottomright'});
+
+populationLegend.onAdd = function (map) {
+var div = L.DomUtil.create('div', 'info legend');
+    div.innerHTML +=
+    '<img src="legend.png" alt="legend" width="134" height="147">';
+return div;
+};
+
+populationChangeLegend.onAdd = function (map) {
+var div = L.DomUtil.create('div', 'info legend');
+    div.innerHTML +=
+    '<img src="change_legend.png" alt="legend" width="134" height="147">';
+return div;
+};
+
+// Add this one (only) for now, as the Population layer is on by default
+populationLegend.addTo(map);
+
+map.on('overlayadd', function (eventLayer) {
+    // Switch to the Population legend...
+    if (eventLayer.name === 'Population') {
+        this.removeControl(populationChangeLegend);
+        populationLegend.addTo(this);
+    } else { // Or switch to the Population Change legend...
+        this.removeControl(populationLegend);
+        populationChangeLegend.addTo(this);
+    }
+});
+
+})(L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 /**
  * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
  */
@@ -1374,108 +1476,6 @@ angular.module("geo.elevation", [
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(L) {
-
-'use strict';	
-
-L.Control.Legend = L.Control.extend({
-    _active: false,
-    _map: null,
-    includes: L.Mixin.Events,
-    options: {
-        position: 'topleft',
-        className: 'fa fa-search-minus',
-        modal: false
-    },
-    onAdd: function (map) {
-        this._map = map;
-        this._container = L.DomUtil.create('div', 'leaflet-zoom-box-control leaflet-bar');
-        this._container.title = "Zoom out";
-        var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        map.on('zoomend', function(){
-            if (map.getZoom() == map.getMaxZoom()){
-                L.DomUtil.addClass(link, 'leaflet-disabled');
-            }
-            else {
-                L.DomUtil.removeClass(link, 'leaflet-disabled');
-            }
-        }, this);
-        map.on('boxzoomend', this.deactivate, this);
-
-        L.DomEvent
-            .on(this._container, 'dblclick', L.DomEvent.stop)
-            .on(this._container, 'click', L.DomEvent.stop)
-            .on(this._container, 'click', function(){
-                this._active = !this._active;
-
-				var newZoom, zoom = map.getZoom();
-				if(zoom <= map.getMinZoom()) {
-					return;
-				} 				
-				if(zoom < 10) {
-					newZoom = zoom - 1;
-				} else if(zoom < 13) {
-					newZoom = zoom - 2;
-				} else {
-					newZoom = zoom - 3;
-				}
-				map.setZoom(newZoom);				
-            }, this);
-        return this._container;
-    },
-    activate: function() {
-        L.DomUtil.addClass(this._container, 'active');
-    },
-    deactivate: function() {
-        L.DomUtil.removeClass(this._container, 'active');
-        this._active = false;
-    }
-});
-
-L.control.zoomout = function (options) {
-  return new L.Control.Zoomout(options);
-};
-
-
-
-
-var populationLegend = L.control({position: 'bottomright'});
-var populationChangeLegend = L.control({position: 'bottomright'});
-
-populationLegend.onAdd = function (map) {
-var div = L.DomUtil.create('div', 'info legend');
-    div.innerHTML +=
-    '<img src="legend.png" alt="legend" width="134" height="147">';
-return div;
-};
-
-populationChangeLegend.onAdd = function (map) {
-var div = L.DomUtil.create('div', 'info legend');
-    div.innerHTML +=
-    '<img src="change_legend.png" alt="legend" width="134" height="147">';
-return div;
-};
-
-// Add this one (only) for now, as the Population layer is on by default
-populationLegend.addTo(map);
-
-map.on('overlayadd', function (eventLayer) {
-    // Switch to the Population legend...
-    if (eventLayer.name === 'Population') {
-        this.removeControl(populationChangeLegend);
-        populationLegend.addTo(this);
-    } else { // Or switch to the Population Change legend...
-        this.removeControl(populationLegend);
-        populationChangeLegend.addTo(this);
-    }
-});
-
-})(L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular, context) {
 'use strict';
 
@@ -1682,150 +1682,6 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
-(function (angular, google, window) {
-
-'use strict';
-
-angular.module('geo.geosearch', ['ngAutocomplete'])
-
-.directive("expSearch", [function() {
-	return {
-		templateUrl : "components/geosearch/search.html",
-		scope : {
-			hideTo:"="
-		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
-			
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-				
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-							
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}		
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
-			});
-			return deferred.promise;   
-		}
-	};
-}]);
-
-}(angular, google, window));
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular) {	
-
-'use strict';
-
-angular.module('explorer.layer.inpector', ['explorer.layers'])
-
-.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
-	return {
-		restrict:"AE",
-		scope:{
-			click : "&",
-			showClose : "=?",
-			active:"=",
-			name:"=?"
-		},
-		controller : ['$scope', function($scope){
-			$scope.toggleShow = function() {
-				var active = this.active;
-				if(!active.isWrapped) {
-					active = layerService.decorate(active);
-					active.init();
-					active.show = true;
-					active.showExtra = true;
-				}
-				active.displayed = active.handleShow();
-			};
-		}],		
-		templateUrl : "map/layerinspector/layerInspector.html"
-	};
-}]);
-
-})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2021,6 +1877,150 @@ angular.module('explorer.layers', ['geo.map'])
 }]);
 
 })(angular, L);
+(function (angular, google, window) {
+
+'use strict';
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+			
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");							
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+				
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+							
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}		
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode'] 
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;   
+		}
+	};
+}]);
+
+}(angular, google, window));
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular) {	
+
+'use strict';
+
+angular.module('explorer.layer.inpector', ['explorer.layers'])
+
+.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
+	return {
+		restrict:"AE",
+		scope:{
+			click : "&",
+			showClose : "=?",
+			active:"=",
+			name:"=?"
+		},
+		controller : ['$scope', function($scope){
+			$scope.toggleShow = function() {
+				var active = this.active;
+				if(!active.isWrapped) {
+					active = layerService.decorate(active);
+					active.init();
+					active.show = true;
+					active.showExtra = true;
+				}
+				active.displayed = active.handleShow();
+			};
+		}],		
+		templateUrl : "map/layerinspector/layerInspector.html"
+	};
+}]);
+
+})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2056,71 +2056,6 @@ angular.module("explorer.layer.slider", [])
 }]);
 
 })(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function (angular, window, L) {
-
-'use strict';
-
-
-angular.module('geo.maphelper', ['geo.map'])
-
-.factory("mapHelper", ["mapService",  "$timeout", "$q", "$rootScope", "flashService", 
-                       function(mapService,  $timeout, $q, $rootScope, flashService){
-	var  helper = { 
-		timeoutPeriod: 200, 
-		timeout : null,
-		callbacks:{}, 
-		checkMarkers:function(){}, 
-		zoomToMarkPoints:function(results, marker){
-			mapService.getMap().then(function(map) {
-				map.setView(results[0], 12, {animate:true});
-			});
-		}, 
-		zoomToLonLats:function(mapService){},
-		markPoint:function(mapService){},
-		getPseudoBaseLayer:function(){
-			return mapService.getMap().then(function(map) {
-				var response = null;
-				map.eachLayer(function(layer) {
-					if(layer.pseudoBaseLayer) {
-						response = layer;
-					}
-				});
-				return response;
-			});
-			
-		},
-		subscribe:function(name, func)	{	
-			if (!this.callbacks[name]) this.callbacks[name]={ subscribers:[] };
-			this.callbacks[name].subscribers.push(func);
-        },
-		pubChangeBaseLayerBias:function(mapService){},
-		getExtentWkt:function(){
-			return mapService.getMap().then(function(map) {
-				return Exp.Util.boundsToWktPoly(map.getBounds());
-			});
-		},
-		decorateWfsLayer:function(mapService){}
-	};
-	
-	mapService.getMap().then(function(map) {
-		map.on("moveend", handleChange);
-		function handleChange(event) {
-			$timeout.cancel(helper.timeout);
-			helper.timeout = $timeout(function() {
-				$rootScope.$broadcast("extentOfInterestChanged", map);
-			}, helper.timoutPeriod);
-		}
-	});
-	
-	
-	return helper;
-}]);
-
-})(angular, window, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3323,6 +3258,71 @@ OpenLayers.TextIcon = OpenLayers.Class(OpenLayers.Icon, {
 
 
 })(angular, window);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function (angular, window, L) {
+
+'use strict';
+
+
+angular.module('geo.maphelper', ['geo.map'])
+
+.factory("mapHelper", ["mapService",  "$timeout", "$q", "$rootScope", "flashService", 
+                       function(mapService,  $timeout, $q, $rootScope, flashService){
+	var  helper = { 
+		timeoutPeriod: 200, 
+		timeout : null,
+		callbacks:{}, 
+		checkMarkers:function(){}, 
+		zoomToMarkPoints:function(results, marker){
+			mapService.getMap().then(function(map) {
+				map.setView(results[0], 12, {animate:true});
+			});
+		}, 
+		zoomToLonLats:function(mapService){},
+		markPoint:function(mapService){},
+		getPseudoBaseLayer:function(){
+			return mapService.getMap().then(function(map) {
+				var response = null;
+				map.eachLayer(function(layer) {
+					if(layer.pseudoBaseLayer) {
+						response = layer;
+					}
+				});
+				return response;
+			});
+			
+		},
+		subscribe:function(name, func)	{	
+			if (!this.callbacks[name]) this.callbacks[name]={ subscribers:[] };
+			this.callbacks[name].subscribers.push(func);
+        },
+		pubChangeBaseLayerBias:function(mapService){},
+		getExtentWkt:function(){
+			return mapService.getMap().then(function(map) {
+				return Exp.Util.boundsToWktPoly(map.getBounds());
+			});
+		},
+		decorateWfsLayer:function(mapService){}
+	};
+	
+	mapService.getMap().then(function(map) {
+		map.on("moveend", handleChange);
+		function handleChange(event) {
+			$timeout.cancel(helper.timeout);
+			helper.timeout = $timeout(function() {
+				$rootScope.$broadcast("extentOfInterestChanged", map);
+			}, helper.timoutPeriod);
+		}
+	});
+	
+	
+	return helper;
+}]);
+
+})(angular, window, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
