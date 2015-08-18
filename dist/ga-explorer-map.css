@@ -1,0 +1,40 @@
+/* Leaflet Specific */
+
+.leaflet-container .leaflet-control-mouseposition {
+  position: relative;
+  bottom: 5px;
+  right: 0;
+  font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
+  width: 16em;
+}
+
+.leaflet-control-scale-line {
+  position: relative;
+  bottom: 20px;
+}
+
+/* App Look and Feel specific */
+
+.slider.slider-horizontal {
+  width: 180px;
+}
+.leaflet-container .leaflet-control-mouseposition {
+  background-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 5px #bbb;
+  padding: 0 5px;
+  margin: 0;
+  color: #333;
+  font: 11px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
+}
+.leaflet-zoom-box-control {
+  font-size: 18px;
+}
+
+.leaflet-zoom-box-control.active a {
+  color: #FFF;
+  background: #666;
+}
+
+.leaflet-zoom-box-crosshair {
+  cursor: crosshair !important;
+}

@@ -1,0 +1,37 @@
+{
+  "name": "explorer-map-components",
+  "version": "0.0.0",
+  "description": "Map components to support Geoscience Australia Explorer like apps.",
+  "keywords": [
+    "angularjs",
+    "javascript",
+    "leaflet",
+    "maps"
+  ],
+  "main": [
+    "dist/ga-explorer-map.js",
+    "dist/ga-explorer-map.min.js",
+    "dist/ga-explorer-map.css"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/GeoscienceAustralia/explorer-map-components.git"
+  },
+  "authors": [
+    "Geoscience Australia"
+  ],
+  "license": "https://raw.githubusercontent.com/GeoscienceAustralia/explorer-map-components/master/LICENCE",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests",
+    "gulpfile.js",
+    "package.json",
+    "bower.json"
+  ],
+  "dependencies": {
+    "leaflet-draw": "0.2.x"
+  }
+}

@@ -1,0 +1,25 @@
+<div class="interactionPanel">
+	<div class="exp-block" ng-show="active" style="height:100%">
+		<div class="exp-header">
+			<div class="interactionPanelHeader" ng-hide="hidename">
+				<a href="javascript:;" ng-click="click()" ng-show="showClose" title="Name is {{name || active.name}}">{{name || active.name}}</a>
+				<span ng-hide="showClose">{{name || active.name}}</span>
+			</div>
+			<div style="float:right">
+				<a class="featureLink" href="javascript:;" title="Show on map" 
+						ng-click="toggleShow(active)"><i class="fa" ng-class="{'fa-eye-slash':(!active.displayed), 'fa-eye':active.displayed}"></i></a>
+				<a class="featureLink" href="javascript:;" title="Collapse extra information" ng-show="showClose"
+						ng-click="click()"><i class="fa fa-caret-square-o-up"></i></a>
+			</div>
+		</div>
+		<div>
+			<div class="thumbNailContainer" ng-show="active.thumbUrl">
+				<img width="100" ng-src="{{active.thumbUrl}}" class="img-thumbnail" alt="{{active.description}}"></img>
+			</div>
+			<strong>Opacity</strong><br/>
+			<span explorer-layer-slider layer="active.layer" title="Change the opacity of the selected layer when shown on the map" class="opacitySlider"></span>
+			<p/>
+			{{active.description}}
+		</div> 
+	</div>
+</div>

@@ -1,0 +1,46 @@
+<div>
+	<div ng-repeat="route in routes" ng-title="{{route.description}}">
+		<i class="fa" ng-class="{'fa-road':route.type == 'ROAD', 'rail':route.type == 'RAIL', 'power':route.type == 'POWERLINE', 'pipe':route.type == 'PIPELINE'}"
+			title="{{route.type == 'ROAD'?'Road':route.type == 'RAIL'?'Rail line' :route.type == 'POWERLINE'?'Power line' :route.type == 'PIPELINE'?'Pipe line':''}}"></i>
+		<span class="ellipsis" style="width:18em;" ng-mouseenter="mouseenter()" ng-mouseleave="mouseleave()">{{route.name}}</span>
+		<div style="float:right">
+			<a class="featureLink" href="javascript:;" title="Plot feature's elevation" 
+				ng-click="showElevation()"><i class="fa fa-align-left fa-rotate-270"></i></a>
+			<a class="featureLink" href="javascript:;" title="Show on map" 
+				ng-click="toggleRoute()"><i class="fa" ng-class="{'fa-eye':(!route.showing), 'fa-eye-slash':route.showing}"></i></a>
+			<a class="featureLink" href="javascript:;" title="Pan map to feature" 
+				ng-click="panToVector()"><i class="fa fa-flag"></i></a>		
+			<a href="javascript:" exp-confirm="'Are you sure that you want to delete this route?'" success="removeRoute()" title="Remove route from collection.">
+				<i class="fa fa-remove" title="Remove this route from your added routes."></i>
+			</a>						
+		</div>
+	</div>
+	
+</div>
+<div>
+	<button type="button" class="btn btn-default" style="margin:2px;width:100%" ng-hide="addRoute" ng-click="showAddRoute()">Add infrastructure route</button>
+	<div ng-show="addRoute" class="addRoute">
+		<div>
+			<label for="addRouteType">Type</label>
+			<select ng-model="newRoute.type" ng-options="k as v for (k,v) in types"></select>
+		</div>
+		<div>
+			<label for="addRouteName">Name</label>
+			<input type="text" ng-model="newRoute.name" id="addRouteName" required="required"/>
+		</div>
+		<div>
+			<label for="addRouteDescription">Description</label>
+			<input type="text" ng-model="newRoute.description" id="addRouteDescription"/>
+		</div>
+		<div>
+			<label for="routeWktAdded">Path drawn</label>
+			<i class="fa fa-check" style="font-size:120%; color:lightgreen" ng-show="newRoute.wkt"></i>
+			<span ng-hide="newRoute.wkt" style="border:1px solid #eb0d0a;padding:2px">Click map for points. Double click to complete</span>
+		</div>
+	</div>
+	<div ng-show="addRoute" style="text-align: right;">
+		<button type="button" class="btn btn-default" style="width:6em" ng-click="cancelRoute()">Cancel</button>
+		<button type="button" class="btn btn-default" style="width:6em" ng-click="saveRoute()" ng-disabled="!(newRoute.type && newRoute.name && newRoute.wkt)">Save</button>
+	</div>
+</div>
+</div>
