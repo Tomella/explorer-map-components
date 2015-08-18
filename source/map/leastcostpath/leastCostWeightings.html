@@ -1,0 +1,30 @@
+<div class="marsWeightings">
+	<div class="panel-group" id="accordion">
+		<div class="panel panel-default" ng-repeat="category in weightings"  ng-show="category.group.length">
+   			<div class="panel-heading">
+   				{{category.label}}
+   			</div>
+   			<div id="collapseOne" class="panel-collapse collapse in">
+   				<div class="panel-body">
+					<div ng-repeat="weighting in category.group" class="lcpSlider">
+						<div style="float:left">
+							<input type="checkbox" ng-model="weighting.selected" class="fixAlignment" />
+							<span class="leastCostPathLabel" ng-class="{disabled:!weighting.selected}">{{weighting.label}}</span>
+						</div>
+						<span style="width:180px;float:right;margin-right:20px" path-least-cost-slider></span>
+						<div style="clear:both"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div style="padding-left:7px;padding-bottom:7px">
+		<label for="lcpBufferSelect">Path bounding box buffered by:</label>
+		<select ng-model="bufferPercent" ng-options="k as v for (k, v) in bufferValues"></select>%
+	</div>
+	<div  class="buttons" style="float:right">
+		<button type="button" class="btn btn-default" style="width:6em;margin:2px" ng-click="cancelLeastCostPath()" title="Cancel calculation of least cost path">Cancel</button>
+		<button type="button" class="btn btn-default focusMe" style="width:6em;margin:2px" ng-click="showLeastCostPath($event)" title="Confirm to continue calculation of least cost path">Continue</button>
+	</div>
+	<div style="clear:both;text-align:center"><strong>Note:</strong>The processing can take a while.<br/>You will be notified when the process is complete.</div>
+</div>

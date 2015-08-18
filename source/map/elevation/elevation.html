@@ -1,0 +1,28 @@
+<div class="container-full elevationContainer" ng-show="geometry" style="background-color:white; opacity:0.9;padding:2px">
+	<div class="row">
+		<div class="col-md-4">
+			<span class="graph-brand">Path Elevation</span>
+		</div>	
+		<div class="col-md-8">
+			<div class="btn-toolbar pull-right" role="toolbar" style="margin-right: 3px;">
+				<div class="btn-group" ng-show="intersectsWaterTable">	
+					<button type="button" class="btn btn-default" ng-click="toggleWaterTable()" 
+							title="Show groundwater over elevation">{{paths.length == 1?'Show':'Hide'}} Water Table</button>
+				</div>	
+				<div class="btn-group">	
+					<button type="button" class="btn btn-default" title="Find out information about the data behind these graphs" 
+							ng-click="showInfo = !showInfo">
+						<i class="fa fa-info-circle" role="presentation" style="font-size:16px; color:black"></i>
+					</button>
+					<exp-info title="Graph Information" style="width:400px;position:absolute;bottom:-80px;right:60px" is-open="showInfo"><div mars-info-elevation></div></exp-info>				
+					<button type="button" class="btn btn-default" title="Close graphs" ng-click="close()">
+						<i class="fa fa-times-circle" role="presentation" style="font-size:16px; color:black"></i>
+					</button>				
+				</div>
+			</div>
+		</div>	
+	</div>
+	<div explorer-graph data="paths" config="config" click="graphClick(event)" move="graphMove(event)" leave="graphLeave(event)" enter="graphEnter(event)" show-zero-line="true"></div>
+	<div exp-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>
+	<div exp-point point="point" class="featuresInfo" style="display:none"></div>
+</div>

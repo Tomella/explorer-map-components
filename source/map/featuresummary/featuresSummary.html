@@ -1,0 +1,10 @@
+<div class="marsfeatures" ng-show="features" ng-style="featurePanelPosition()" ng-class="features.popupClass">
+	<div id="menu_mn_active_tt_active" data-role="popup" role="tooltip">
+		<div class="pathContent">
+			<div ng-repeat="(key, feature) in features.data">
+				{{mappings[key].title}}  ({{feature}})
+			</div>
+			<div ng-hide="features.count">No nearby features</div>
+		</div>
+	</div>
+</div>

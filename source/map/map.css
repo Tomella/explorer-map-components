@@ -1,0 +1,19 @@
+/* Leaflet Specific */
+
+.leaflet-container .leaflet-control-mouseposition {
+  position:relative;
+  bottom:5px;
+  right:0;
+  font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
+  width:16em;
+}
+
+.leaflet-control-scale-line {
+	position:relative;
+	bottom:20px;
+}
+
+/* App Look and Feel specific */
+.slider.slider-horizontal {
+	width: 180px;
+}

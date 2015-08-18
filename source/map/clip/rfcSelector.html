@@ -1,0 +1,26 @@
+<div class="rfcSelectorWindow">
+    <div class="modal-header">
+        <h3 class="modal-title" style="font-weight:bold">Select reference feature classes of interest</h3>
+    </div>
+	<div ng-repeat="(key, asset) in featureClasses" class="rfcSelectorList" style="padding:2px">
+		<span>
+			<input type="checkbox" ng-attr-name="szc{{key}}" ng-model="asset.clipSelected"/>
+		</span>
+		<span class="ellipsis" style="width:250px;display:inline-block">
+			<label ng-attr-for="szc{{key}}" style="margin-bottom:0px">{{asset.label}}</label>
+		</span>
+	</div>
+	
+	<div style="width: 100%; overflow: hidden;padding-top:5px">
+	    <div style="width: 4em; float: left;padding-top:5px;font-weight:bold"><label for="szcEmailAddress">Notify</label></div>
+    	<div style="margin-left: 4em;">
+    		<input type="email" ng-model="email" name="szcEmailAddress" style="width:100%" placeholder="Email address"/>
+    	</div>
+		<div style="text-align:center">Email job completion notification.</div>
+	</div>
+	<div style="clear:both"></div>
+	<div  class="buttons" style="text-align:right; padding:7px">
+		<button type="button" class="btn btn-default" style="width:4em;margin-top:2px" ng-click="cancel()" title="Cancel calculation of least cost path">Cancel</button>
+		<button type="button" class="btn btn-default focusMe" style="width:4em;margin-top:2px" ng-click="startClipZipShip()" title="Select one or more reference feature classes before continuing." ng-disabled="featureClasses | noClipSelected">Process</button>
+	</div>
+</div>

@@ -1,0 +1,33 @@
+{
+  "name": "ExplorerMapComponents",
+  "version": "0.0.1-SNAPSHOT",
+  "description": "Explorer Map components",
+  "keywords": [
+    "Explorer",
+    "Map",
+    "component"
+  ],
+  "author": {
+    "name": "Geoscience Australia",
+    "url": "http://www.ga.gov.au/"
+  },
+  "homepage": "http://www.ga.gov.au/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GeoscienceAustralia/explorer-map-components"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "add-stream": "^1.0.0",
+    "gulp": "^3.8.11",
+    "gulp-angular-templatecache": "^1.6.0",
+    "gulp-concat": "^2.5.2",
+    "gulp-concat-css": "^2.2.0",
+    "gulp-jshint": "^1.11.0",
+    "gulp-rename": "^1.2.2",
+    "gulp-sass": "^2.0.1",
+    "gulp-uglify": "^1.2.0"
+  },
+  "bundleDependencies": [],
+  "private": true
+}

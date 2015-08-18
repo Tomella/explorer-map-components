@@ -1,0 +1,12 @@
+<div>
+The elevation graph is calculated from the 3" DEM data. 
+The data is held in a grid with a cell size of approx. 90 m. 
+The data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found 
+<a target="_blank" href="http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6">here</a>
+<br/>
+If the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. 
+The accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the 
+water table appear above the elevation of the surface on occasions. 
+Data availability will be indicated by the button labelled "Show Water Table". 
+<a href="javascript:;" ng-click="toggleWaterTableShowing()">Click to {{state.isWaterTableShowing?'hide':'view'}} the water table extent.</a>
+</div>
