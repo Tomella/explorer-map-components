@@ -28,7 +28,7 @@ angular.module('explorer.layer.inpector', ['explorer.layers'])
 				active.displayed = active.handleShow();
 			};
 		}],		
-		templateUrl : "map/layerinspector/layerInspector.html?v=1"
+		templateUrl : "map/layerinspector/layerInspector.html"
 	};
 }]);
 

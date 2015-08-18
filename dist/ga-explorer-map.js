@@ -975,6 +975,73 @@ angular.module("explorer.crosshair", ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(angular, L){
+	
+'use strict';
+
+angular.module("geo.draw", ['geo.map'])
+
+.directive("geoDraw", ['$log', '$rootScope', 'mapService', function($log, $rootScope, mapService) {
+	var DEFAULTS = {
+		rectangleEvent : "geo.draw.rectangle.created",
+		lineEvent : "geo.draw.line.created"
+	};
+	
+	
+	return {
+		restrict : "AE",
+		scope : {
+			data: "=",
+			rectangleEvent : "@",
+			lineEvent : "@"
+		},
+		link : function(scope, element, attrs, ctrl) {
+			angular.forEach(DEFAULTS, function(value, key) {
+				if(!scope[key]) {
+					scope[key] = value;
+				}
+			});
+						
+			mapService.getMap().then(function(map) {
+				var drawnItems = new L.FeatureGroup(),
+				    drawControl,
+				    options = { 
+				       edit: {
+				          featureGroup: drawnItems
+				       }
+				    };
+	
+				if(scope.data) {
+					angular.extend(options, scope.data);
+				}				
+				scope.drawnItems = drawnItems;
+				
+				map.addLayer(drawnItems);
+				// Initialise the draw control and pass it the FeatureGroup of editable layers
+				drawControl = new L.Control.Draw(options);
+				map.addControl(drawControl);
+				map.on("draw:created", function(event) {
+					scope.$apply(function() {
+						({
+							polyline : function() {
+								var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
+								$rootScope.$broadcast(scope.lineEvent, data);
+							},
+							rectangle : function() {
+								$log.info("rect");
+							}
+						})[event.layerType]();
+					});
+				});					
+			});
+		}
+	};
+}]);
+
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 /**
  * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
  */
@@ -1008,7 +1075,7 @@ angular.module("geo.elevation", [
 		infoLoading = '<span><img alt="Waiting..." src="resources/img/tinyloader.gif" ng-show="message.spinner" style="position:relative;top:2px;" width="12"></img></span>';	
 	
 	return {
-		templateUrl : "map/elevation/elevation.html?v=2",
+		templateUrl : "map/elevation/elevation.html",
 		scope:true,
 		controller : ['$scope', function($scope) {
 			$scope.paths = [];
@@ -1307,70 +1374,105 @@ angular.module("geo.elevation", [
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L){
-	
-'use strict';
+(function(L) {
 
-angular.module("geo.draw", ['geo.map'])
+'use strict';	
 
-.directive("geoDraw", ['$log', '$rootScope', 'mapService', function($log, $rootScope, mapService) {
-	var DEFAULTS = {
-		rectangleEvent : "geo.draw.rectangle.created",
-		lineEvent : "geo.draw.line.created"
-	};
-	
-	
-	return {
-		restrict : "AE",
-		scope : {
-			data: "=",
-			rectangleEvent : "@",
-			lineEvent : "@"
-		},
-		link : function(scope, element, attrs, ctrl) {
-			angular.forEach(DEFAULTS, function(value, key) {
-				if(!scope[key]) {
-					scope[key] = value;
+L.Control.Legend = L.Control.extend({
+    _active: false,
+    _map: null,
+    includes: L.Mixin.Events,
+    options: {
+        position: 'topleft',
+        className: 'fa fa-search-minus',
+        modal: false
+    },
+    onAdd: function (map) {
+        this._map = map;
+        this._container = L.DomUtil.create('div', 'leaflet-zoom-box-control leaflet-bar');
+        this._container.title = "Zoom out";
+        var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        map.on('zoomend', function(){
+            if (map.getZoom() == map.getMaxZoom()){
+                L.DomUtil.addClass(link, 'leaflet-disabled');
+            }
+            else {
+                L.DomUtil.removeClass(link, 'leaflet-disabled');
+            }
+        }, this);
+        map.on('boxzoomend', this.deactivate, this);
+
+        L.DomEvent
+            .on(this._container, 'dblclick', L.DomEvent.stop)
+            .on(this._container, 'click', L.DomEvent.stop)
+            .on(this._container, 'click', function(){
+                this._active = !this._active;
+
+				var newZoom, zoom = map.getZoom();
+				if(zoom <= map.getMinZoom()) {
+					return;
+				} 				
+				if(zoom < 10) {
+					newZoom = zoom - 1;
+				} else if(zoom < 13) {
+					newZoom = zoom - 2;
+				} else {
+					newZoom = zoom - 3;
 				}
-			});
-						
-			mapService.getMap().then(function(map) {
-				var drawnItems = new L.FeatureGroup(),
-				    drawControl,
-				    options = { 
-				       edit: {
-				          featureGroup: drawnItems
-				       }
-				    };
-	
-				if(scope.data) {
-					angular.extend(options, scope.data);
-				}				
-				scope.drawnItems = drawnItems;
-				
-				map.addLayer(drawnItems);
-				// Initialise the draw control and pass it the FeatureGroup of editable layers
-				drawControl = new L.Control.Draw(options);
-				map.addControl(drawControl);
-				map.on("draw:created", function(event) {
-					scope.$apply(function() {
-						({
-							polyline : function() {
-								var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
-								$rootScope.$broadcast(scope.lineEvent, data);
-							},
-							rectangle : function() {
-								$log.info("rect");
-							}
-						})[event.layerType]();
-					});
-				});					
-			});
-		}
-	};
-}]);
+				map.setZoom(newZoom);				
+            }, this);
+        return this._container;
+    },
+    activate: function() {
+        L.DomUtil.addClass(this._container, 'active');
+    },
+    deactivate: function() {
+        L.DomUtil.removeClass(this._container, 'active');
+        this._active = false;
+    }
+});
 
-})(angular, L);
+L.control.zoomout = function (options) {
+  return new L.Control.Zoomout(options);
+};
+
+
+
+
+var populationLegend = L.control({position: 'bottomright'});
+var populationChangeLegend = L.control({position: 'bottomright'});
+
+populationLegend.onAdd = function (map) {
+var div = L.DomUtil.create('div', 'info legend');
+    div.innerHTML +=
+    '<img src="legend.png" alt="legend" width="134" height="147">';
+return div;
+};
+
+populationChangeLegend.onAdd = function (map) {
+var div = L.DomUtil.create('div', 'info legend');
+    div.innerHTML +=
+    '<img src="change_legend.png" alt="legend" width="134" height="147">';
+return div;
+};
+
+// Add this one (only) for now, as the Population layer is on by default
+populationLegend.addTo(map);
+
+map.on('overlayadd', function (eventLayer) {
+    // Switch to the Population legend...
+    if (eventLayer.name === 'Population') {
+        this.removeControl(populationChangeLegend);
+        populationLegend.addTo(this);
+    } else { // Or switch to the Population Change legend...
+        this.removeControl(populationLegend);
+        populationChangeLegend.addTo(this);
+    }
+});
+
+})(L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1580,108 +1682,6 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(L) {
-
-'use strict';	
-
-L.Control.Legend = L.Control.extend({
-    _active: false,
-    _map: null,
-    includes: L.Mixin.Events,
-    options: {
-        position: 'topleft',
-        className: 'fa fa-search-minus',
-        modal: false
-    },
-    onAdd: function (map) {
-        this._map = map;
-        this._container = L.DomUtil.create('div', 'leaflet-zoom-box-control leaflet-bar');
-        this._container.title = "Zoom out";
-        var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        map.on('zoomend', function(){
-            if (map.getZoom() == map.getMaxZoom()){
-                L.DomUtil.addClass(link, 'leaflet-disabled');
-            }
-            else {
-                L.DomUtil.removeClass(link, 'leaflet-disabled');
-            }
-        }, this);
-        map.on('boxzoomend', this.deactivate, this);
-
-        L.DomEvent
-            .on(this._container, 'dblclick', L.DomEvent.stop)
-            .on(this._container, 'click', L.DomEvent.stop)
-            .on(this._container, 'click', function(){
-                this._active = !this._active;
-
-				var newZoom, zoom = map.getZoom();
-				if(zoom <= map.getMinZoom()) {
-					return;
-				} 				
-				if(zoom < 10) {
-					newZoom = zoom - 1;
-				} else if(zoom < 13) {
-					newZoom = zoom - 2;
-				} else {
-					newZoom = zoom - 3;
-				}
-				map.setZoom(newZoom);				
-            }, this);
-        return this._container;
-    },
-    activate: function() {
-        L.DomUtil.addClass(this._container, 'active');
-    },
-    deactivate: function() {
-        L.DomUtil.removeClass(this._container, 'active');
-        this._active = false;
-    }
-});
-
-L.control.zoomout = function (options) {
-  return new L.Control.Zoomout(options);
-};
-
-
-
-
-var populationLegend = L.control({position: 'bottomright'});
-var populationChangeLegend = L.control({position: 'bottomright'});
-
-populationLegend.onAdd = function (map) {
-var div = L.DomUtil.create('div', 'info legend');
-    div.innerHTML +=
-    '<img src="legend.png" alt="legend" width="134" height="147">';
-return div;
-};
-
-populationChangeLegend.onAdd = function (map) {
-var div = L.DomUtil.create('div', 'info legend');
-    div.innerHTML +=
-    '<img src="change_legend.png" alt="legend" width="134" height="147">';
-return div;
-};
-
-// Add this one (only) for now, as the Population layer is on by default
-populationLegend.addTo(map);
-
-map.on('overlayadd', function (eventLayer) {
-    // Switch to the Population legend...
-    if (eventLayer.name === 'Population') {
-        this.removeControl(populationChangeLegend);
-        populationLegend.addTo(this);
-    } else { // Or switch to the Population Change legend...
-        this.removeControl(populationLegend);
-        populationChangeLegend.addTo(this);
-    }
-});
-
-})(L);
 (function (angular, google, window) {
 
 'use strict';
@@ -1821,43 +1821,8 @@ angular.module('explorer.layer.inpector', ['explorer.layers'])
 				active.displayed = active.handleShow();
 			};
 		}],		
-		templateUrl : "map/layerinspector/layerInspector.html?v=1"
+		templateUrl : "map/layerinspector/layerInspector.html"
 	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular) {
-'use strict';
-
-angular.module("explorer.layer.slider", [])
-
-.directive('explorerLayerSlider', [function() {
-	return {
-		template : '<slider min="0" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
-		scope: {
-			layer:"=?"
-		},
-		
-		link: function(scope, element, attrs) {
-			scope.slider = {
-				opacity:1,
-				visibility:true
-			};
-
-			scope.$watch("slider.opacity", function(newValue, oldValue) {
-				if(scope.layer) {
-					scope.layer.setOpacity(newValue);
-				}
-			});
-
-			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
-				scope.slider.opacity = newValue;
-			});
-		}
-	};	
 }]);
 
 })(angular);
@@ -2056,6 +2021,106 @@ angular.module('explorer.layers', ['geo.map'])
 }]);
 
 })(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular) {
+'use strict';
+
+angular.module("explorer.layer.slider", [])
+
+.directive('explorerLayerSlider', [function() {
+	return {
+		template : '<slider min="0" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
+		scope: {
+			layer:"=?"
+		},
+		
+		link: function(scope, element, attrs) {
+			scope.slider = {
+				opacity:1,
+				visibility:true
+			};
+
+			scope.$watch("slider.opacity", function(newValue, oldValue) {
+				if(scope.layer) {
+					scope.layer.setOpacity(newValue);
+				}
+			});
+
+			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
+				scope.slider.opacity = newValue;
+			});
+		}
+	};	
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function (angular, window, L) {
+
+'use strict';
+
+
+angular.module('geo.maphelper', ['geo.map'])
+
+.factory("mapHelper", ["mapService",  "$timeout", "$q", "$rootScope", "flashService", 
+                       function(mapService,  $timeout, $q, $rootScope, flashService){
+	var  helper = { 
+		timeoutPeriod: 200, 
+		timeout : null,
+		callbacks:{}, 
+		checkMarkers:function(){}, 
+		zoomToMarkPoints:function(results, marker){
+			mapService.getMap().then(function(map) {
+				map.setView(results[0], 12, {animate:true});
+			});
+		}, 
+		zoomToLonLats:function(mapService){},
+		markPoint:function(mapService){},
+		getPseudoBaseLayer:function(){
+			return mapService.getMap().then(function(map) {
+				var response = null;
+				map.eachLayer(function(layer) {
+					if(layer.pseudoBaseLayer) {
+						response = layer;
+					}
+				});
+				return response;
+			});
+			
+		},
+		subscribe:function(name, func)	{	
+			if (!this.callbacks[name]) this.callbacks[name]={ subscribers:[] };
+			this.callbacks[name].subscribers.push(func);
+        },
+		pubChangeBaseLayerBias:function(mapService){},
+		getExtentWkt:function(){
+			return mapService.getMap().then(function(map) {
+				return Exp.Util.boundsToWktPoly(map.getBounds());
+			});
+		},
+		decorateWfsLayer:function(mapService){}
+	};
+	
+	mapService.getMap().then(function(map) {
+		map.on("moveend", handleChange);
+		function handleChange(event) {
+			$timeout.cancel(helper.timeout);
+			helper.timeout = $timeout(function() {
+				$rootScope.$broadcast("extentOfInterestChanged", map);
+			}, helper.timoutPeriod);
+		}
+	});
+	
+	
+	return helper;
+}]);
+
+})(angular, window, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3261,71 +3326,6 @@ OpenLayers.TextIcon = OpenLayers.Class(OpenLayers.Icon, {
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-
-(function (angular, window, L) {
-
-'use strict';
-
-
-angular.module('geo.maphelper', ['geo.map'])
-
-.factory("mapHelper", ["mapService",  "$timeout", "$q", "$rootScope", "flashService", 
-                       function(mapService,  $timeout, $q, $rootScope, flashService){
-	var  helper = { 
-		timeoutPeriod: 200, 
-		timeout : null,
-		callbacks:{}, 
-		checkMarkers:function(){}, 
-		zoomToMarkPoints:function(results, marker){
-			mapService.getMap().then(function(map) {
-				map.setView(results[0], 12, {animate:true});
-			});
-		}, 
-		zoomToLonLats:function(mapService){},
-		markPoint:function(mapService){},
-		getPseudoBaseLayer:function(){
-			return mapService.getMap().then(function(map) {
-				var response = null;
-				map.eachLayer(function(layer) {
-					if(layer.pseudoBaseLayer) {
-						response = layer;
-					}
-				});
-				return response;
-			});
-			
-		},
-		subscribe:function(name, func)	{	
-			if (!this.callbacks[name]) this.callbacks[name]={ subscribers:[] };
-			this.callbacks[name].subscribers.push(func);
-        },
-		pubChangeBaseLayerBias:function(mapService){},
-		getExtentWkt:function(){
-			return mapService.getMap().then(function(map) {
-				return Exp.Util.boundsToWktPoly(map.getBounds());
-			});
-		},
-		decorateWfsLayer:function(mapService){}
-	};
-	
-	mapService.getMap().then(function(map) {
-		map.on("moveend", handleChange);
-		function handleChange(event) {
-			$timeout.cancel(helper.timeout);
-			helper.timeout = $timeout(function() {
-				$rootScope.$broadcast("extentOfInterestChanged", map);
-			}, helper.timoutPeriod);
-		}
-	});
-	
-	
-	return helper;
-}]);
-
-})(angular, window, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular) {
 'use strict';
 
@@ -4316,6 +4316,484 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
     };
 
 })();
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L, window) {
+'use strict';
+
+angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
+
+.directive("expPoint", ['pointService', function(pointService) {
+	return {
+		scope : {
+			data : "=point"
+		},		
+		controller : ['$scope', function($scope) {
+			$scope.$watch("data", function(newData, oldData) {
+				if(newData || oldData) {
+					pointService.showPoint($scope.data);
+				}
+			});
+		}]
+	};
+}])
+
+.directive("expClickMapPoint", ['pointService', function(pointService) {
+	return {
+		restrict:'AE',
+		scope : {
+		},		
+		link : function(scope, element) {
+			pointService.addMapListener(function(latlon) {
+				pointService.showPoint(latlon);
+			}, this);
+		}
+	};
+}])
+
+.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
+	var defaultOptions = {
+			actions : [],
+			visible : true,
+			modal : false,
+			minWidth : 240,
+			title : "Features within approx 2km",
+			position : {top:140, left:40}
+		};
+	
+	return {
+		restrict:"AE",
+		templateUrl : "map/point/point.html",
+		scope :true,
+		controller : ['$scope', function($scope) {
+			if($scope.options) {
+				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
+			} else {
+				$scope.windowOptions = angular.extend({}, defaultOptions);
+			}
+		}],
+		link : function(scope, element) {
+			console.log("Id = ", scope.$id);
+			// This things is a one shot wonder so we listen for an event.
+			$rootScope.$on("map.point.changed", function(event, point) {
+				scope.point = point;
+				pointService.removeLayer();
+				if(typeof point != "undefined" && point) {
+					scope.changePoint(point);
+					pointService.getMetaData().then(function(response) {
+						scope.metadata = response.data;
+					});
+				}
+			});
+			
+			scope.createTitle = function() {
+				var oneItem = !this.greaterThanOneItem(),
+					layerName = this.feature.layerName,
+					metadata = this.metadata[layerName],
+					preferredLabel = metadata.preferredLabel,
+					value = this.feature.attributes[preferredLabel];
+				
+				if(!oneItem && value && value != "Null") {
+					return value;
+				} else {
+					return metadata.label;
+				}				
+			};
+			
+			scope.changePoint = function(newValue) {
+				pointService.moveMarker(newValue);
+				if(newValue) {
+					pointService.getInfo(newValue).then(function(data) {
+						handleResponse(data);
+					});
+				}
+				pointService.removeLayer();
+			};
+			
+			scope.clearPoint = function() {
+				scope.point = false;
+				pointService.removeLayer();
+				pointService.removeMarker();
+			};
+			
+			scope.toggleShow = function() {
+				this.feature.displayed = !this.feature.displayed;
+				if(this.feature.displayed) {
+					this.feature.feature = pointService.showFeature(this.feature);
+				} else {
+					pointService.hideFeature(this.feature.feature);
+					this.feature.layer = null;
+				}
+			};			
+			
+			scope.oneShowing = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				return oneShown;
+			};
+			
+			scope.greaterThanOneItem = function() {
+				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
+			};
+			
+			scope.groupShow = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				
+				group.forEach(function(feature) {
+					if(oneShown) {
+						feature.feature = pointService.hideFeature(feature.feature);
+						feature.displayed = false;
+					} else {
+						feature.feature = pointService.showFeature(feature);
+						feature.displayed = true;
+					}
+				});
+			};			
+			
+			scope.allHidden = function() {
+				var allHidden = true;
+				if(this.featuresInfo && this.featuresInfo.results) {
+					this.featuresInfo.results.forEach(function(feature) {
+						allHidden &= !feature.displayed;
+					});
+				}
+				return allHidden;
+			};
+			
+			scope.toggleAll = function() {
+				var allHidden = scope.allHidden();
+				this.featuresInfo.results.forEach(function(feature) {
+					if(allHidden) {
+						if(!feature.displayed) {
+							feature.displayed = true;
+							feature.feature = pointService.showFeature(feature);
+						}
+					} else {
+						if(feature.displayed) {
+							feature.displayed = false;
+							feature.feature = pointService.hideFeature(feature.feature);
+						}
+					}
+				});
+			};
+			
+			scope.elevationPath = function(label) {
+				if(!this.feature.feature) {
+					this.feature.feature = pointService.createFeature(this.feature);
+				}
+				pointService.triggerElevationPlot(this.feature.feature[0], label);
+			};
+			
+			function handleResponse(data) {
+				scope.featuresInfo = data;
+				pointService.createLayer();				
+			}
+		}
+	};
+}])
+
+.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
+	var featuresUnderPointUrl = "service/path/featureInfo",
+		layer = null,
+		control = null,
+		esriGeometryMapping = {
+			"esriGeometryPoint"   : {
+				createFeatures : function(geometry) {
+					var point = [geometry.y, geometry.x];
+					return [L.circleMarker(point)];
+				},
+				type : "x,y"
+			},
+			"esriGeometryPolyline": {
+				createFeatures : function(geometry) {
+					var features = [];
+					geometry.paths.forEach(function(path) {
+						var points = [];
+						path.forEach(function(point) {
+							points.push([point[1], point[0]]);
+						});						
+						features.push(L.polyline(points));
+					});
+					return features;
+				},
+				type: "paths"
+			},
+			"esriGeometryPolygon" : {
+				createFeatures : function(geometry) {
+					var polygonGeometry,
+						rings = [];
+					
+					geometry.rings.forEach(function(ring) {
+						var linearRing, polygon, points = [];
+						ring.forEach(function(pointArr) {
+							points.push([pointArr[1], pointArr[0]]);
+						});
+					    rings.push(points);
+					});
+					polygonGeometry = L.multiPolygon(rings);
+					return [polygonGeometry];
+				},
+				type: "rings"
+			}
+		},
+		metaDataUrl = "map/point/pointMetadata.json",
+		marker = null,
+		clickControl = null,
+		clickListeners = [];
+	
+	return {
+		triggerElevationPlot : function(geometry, label) {
+			var distance = geometry.getLength();
+			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
+		},
+		
+		addMapListener : function(callback, bound) {
+			var alreadyBound = false;
+			clickListeners.forEach(function(obj) {
+				if(obj.callback == callback && obj.bound == bound) {
+					alreadyBound = true;
+				}
+			});
+			if(!alreadyBound) {
+				clickListeners.push({callback : callback, bound : bound});
+			}
+			
+			if(!clickControl) {
+				clickControl = true;
+				mapService.getMap().then(function(map) {
+		            map.on("click", function(e) {
+		               clickListeners.forEach(function(listener) {
+		            	   var callback = listener.callback,
+		            	   		point = {
+		            			   x: e.latlng.lng,
+		            			   y: e.latlng.lat
+		            	   		};
+		            	   
+		            	   point.lat = point.y;
+		            	   point.lng = point.x;
+		                   if(listener.bound) {
+		                	   callback.bind(listener.bound);
+		                   }
+		                   callback(point);
+		                }); 
+		            });
+				});
+			}
+		},
+		
+		getMetaData : function() {
+			return $http.get(metaDataUrl, {cache:true});
+		},
+		
+		moveMarker : function(point) {
+			mapService.getMap().then(function(map) {
+				var size, offset, icon;
+	
+				if(marker) {
+					map.removeLayer(marker);
+				}
+				marker = L.marker(point).addTo(map);
+			});
+			
+		},
+		
+		removeMarker : function() {
+			if(marker) {
+				mapService.getMap().then(function(map) {
+					map.removeLayer(marker);
+					marker = null;					
+				});
+			}			
+		},
+		
+		showPoint : function(point) {
+			$rootScope.$broadcast("map.point.changed", point);
+		},
+		
+		removePoint : function() {
+			$rootScope.$broadcast("map.point.changed", null);
+		},
+		
+		getBehaviour : function(geometryType) {
+			
+		},
+		
+		getInfo : function(point) {
+			return mapService.getMap().then(function(map) {
+				var bounds = map._container.getBoundingClientRect(),
+					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
+					extent = map.getBounds();
+
+				return configService.getConfig("clientSessionId").then(function(id) {			
+					return $http.post(featuresUnderPointUrl, {
+							clientSessionId : id,
+							x:point.x, 
+							y:point.y, 
+							width:bounds.width / ratio, 
+							height:bounds.height / ratio,
+							extent : {
+								left : extent.left,
+								right : extent.right,
+								top: extent.top,
+								bottom: extent.bottom
+					}}).then(function(response) {
+						return response.data;
+					});
+				});
+			});
+		},
+		
+		overFeatures : function(features) {
+			var item;
+			if(!features) {
+				return;
+			}
+			if(angular.isArray(features)) {
+				item = features[0];
+			} else {
+				item = features;
+			}
+			if(item) {
+				item.bringToFront().setStyle({color:"red"});
+			}
+		},
+		
+		outFeatures : function(features) {
+			if(!features) {
+				return;
+			}
+			features.forEach(function(feature) {
+				feature.setStyle({color : '#03f'});
+			}); 			
+		},
+		
+		createLayer : function() {
+			return mapService.getMap().then(function(map) {
+				layer = L.layerGroup();
+				map.addLayer(layer);
+				return layer;
+			});	
+		},
+		
+		removeLayer : function() {		
+			return mapService.getMap().then(function(map) {
+				if(layer) {
+					map.removeLayer(layer);
+				}
+                /* jshint -W093 */
+				return layer = null;
+			});	
+		},
+		
+		createFeature : function(data) {
+			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
+		},
+		
+		showFeature : function(data) {
+			var features = this.createFeature(data);
+			features.forEach(function(feature) {
+				layer.addLayer(feature);				
+			});
+			return features;
+		},
+		
+		hideFeature : function(features) {
+			if(features) {
+				features.forEach(function(feature) {
+					layer.removeLayer(feature);					
+				});
+			}
+		}
+	};
+}])
+
+.filter("dashNull", [function() {
+	return function(value) {
+		if(!value || "Null" == value) {
+			return "-";
+		}
+		return value;
+	};
+}])
+
+.filter("featureGroups", [function() {
+	return function(items) {
+		var groups = [],
+			set = {};
+		if(!items) {
+			return groups;
+		}
+		items.forEach(function(item) {
+			var layerName = item.layerName;
+			if(!set[layerName]) {
+				set[layerName] = true;
+				groups.push(layerName);
+			}
+		});
+		return groups;
+	};
+}])
+
+.filter("filterGroupsByLayername", [function() {
+	return function(items, layerName) {
+		var group = [];
+		if(!items) {
+			return group;
+		}
+		items.forEach(function(item) {
+			if(layerName == item.layerName) {
+				group.push(item);
+			}
+		});
+		return group;
+	};
+}])
+
+
+.controller("OverFeatureCtrl", OverFeatureCtrl);
+
+OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
+function OverFeatureCtrl($filter, pointService) {
+	this.click = function() {
+		console.log("Click");
+	};
+
+	this.mouseenter = function(feature) {
+		console.log("enter");
+		pointService.overFeatures(feature.feature);
+	};
+	
+	this.mouseleave = function(feature) {
+		console.log("leave");
+		pointService.outFeatures(feature.feature);
+	};
+	
+	this.groupEnter = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.overFeatures(feature.feature);
+		});
+	};
+	
+	this.groupLeave = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.outFeatures(feature.feature);
+		});
+	};
+}
+
+})(angular, L, window);
+
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -5359,484 +5837,6 @@ L.KMLMarker = L.Marker.extend({
 
 
 })(L, Exp);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular, L, window) {
-'use strict';
-
-angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
-
-.directive("expPoint", ['pointService', function(pointService) {
-	return {
-		scope : {
-			data : "=point"
-		},		
-		controller : ['$scope', function($scope) {
-			$scope.$watch("data", function(newData, oldData) {
-				if(newData || oldData) {
-					pointService.showPoint($scope.data);
-				}
-			});
-		}]
-	};
-}])
-
-.directive("expClickMapPoint", ['pointService', function(pointService) {
-	return {
-		restrict:'AE',
-		scope : {
-		},		
-		link : function(scope, element) {
-			pointService.addMapListener(function(latlon) {
-				pointService.showPoint(latlon);
-			}, this);
-		}
-	};
-}])
-
-.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
-	var defaultOptions = {
-			actions : [],
-			visible : true,
-			modal : false,
-			minWidth : 240,
-			title : "Features within approx 2km",
-			position : {top:140, left:40}
-		};
-	
-	return {
-		restrict:"AE",
-		templateUrl : "map/point/point.html?v=2.7",
-		scope :true,
-		controller : ['$scope', function($scope) {
-			if($scope.options) {
-				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
-			} else {
-				$scope.windowOptions = angular.extend({}, defaultOptions);
-			}
-		}],
-		link : function(scope, element) {
-			console.log("Id = ", scope.$id);
-			// This things is a one shot wonder so we listen for an event.
-			$rootScope.$on("map.point.changed", function(event, point) {
-				scope.point = point;
-				pointService.removeLayer();
-				if(typeof point != "undefined" && point) {
-					scope.changePoint(point);
-					pointService.getMetaData().then(function(response) {
-						scope.metadata = response.data;
-					});
-				}
-			});
-			
-			scope.createTitle = function() {
-				var oneItem = !this.greaterThanOneItem(),
-					layerName = this.feature.layerName,
-					metadata = this.metadata[layerName],
-					preferredLabel = metadata.preferredLabel,
-					value = this.feature.attributes[preferredLabel];
-				
-				if(!oneItem && value && value != "Null") {
-					return value;
-				} else {
-					return metadata.label;
-				}				
-			};
-			
-			scope.changePoint = function(newValue) {
-				pointService.moveMarker(newValue);
-				if(newValue) {
-					pointService.getInfo(newValue).then(function(data) {
-						handleResponse(data);
-					});
-				}
-				pointService.removeLayer();
-			};
-			
-			scope.clearPoint = function() {
-				scope.point = false;
-				pointService.removeLayer();
-				pointService.removeMarker();
-			};
-			
-			scope.toggleShow = function() {
-				this.feature.displayed = !this.feature.displayed;
-				if(this.feature.displayed) {
-					this.feature.feature = pointService.showFeature(this.feature);
-				} else {
-					pointService.hideFeature(this.feature.feature);
-					this.feature.layer = null;
-				}
-			};			
-			
-			scope.oneShowing = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				return oneShown;
-			};
-			
-			scope.greaterThanOneItem = function() {
-				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
-			};
-			
-			scope.groupShow = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				
-				group.forEach(function(feature) {
-					if(oneShown) {
-						feature.feature = pointService.hideFeature(feature.feature);
-						feature.displayed = false;
-					} else {
-						feature.feature = pointService.showFeature(feature);
-						feature.displayed = true;
-					}
-				});
-			};			
-			
-			scope.allHidden = function() {
-				var allHidden = true;
-				if(this.featuresInfo && this.featuresInfo.results) {
-					this.featuresInfo.results.forEach(function(feature) {
-						allHidden &= !feature.displayed;
-					});
-				}
-				return allHidden;
-			};
-			
-			scope.toggleAll = function() {
-				var allHidden = scope.allHidden();
-				this.featuresInfo.results.forEach(function(feature) {
-					if(allHidden) {
-						if(!feature.displayed) {
-							feature.displayed = true;
-							feature.feature = pointService.showFeature(feature);
-						}
-					} else {
-						if(feature.displayed) {
-							feature.displayed = false;
-							feature.feature = pointService.hideFeature(feature.feature);
-						}
-					}
-				});
-			};
-			
-			scope.elevationPath = function(label) {
-				if(!this.feature.feature) {
-					this.feature.feature = pointService.createFeature(this.feature);
-				}
-				pointService.triggerElevationPlot(this.feature.feature[0], label);
-			};
-			
-			function handleResponse(data) {
-				scope.featuresInfo = data;
-				pointService.createLayer();				
-			}
-		}
-	};
-}])
-
-.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
-	var featuresUnderPointUrl = "service/path/featureInfo",
-		layer = null,
-		control = null,
-		esriGeometryMapping = {
-			"esriGeometryPoint"   : {
-				createFeatures : function(geometry) {
-					var point = [geometry.y, geometry.x];
-					return [L.circleMarker(point)];
-				},
-				type : "x,y"
-			},
-			"esriGeometryPolyline": {
-				createFeatures : function(geometry) {
-					var features = [];
-					geometry.paths.forEach(function(path) {
-						var points = [];
-						path.forEach(function(point) {
-							points.push([point[1], point[0]]);
-						});						
-						features.push(L.polyline(points));
-					});
-					return features;
-				},
-				type: "paths"
-			},
-			"esriGeometryPolygon" : {
-				createFeatures : function(geometry) {
-					var polygonGeometry,
-						rings = [];
-					
-					geometry.rings.forEach(function(ring) {
-						var linearRing, polygon, points = [];
-						ring.forEach(function(pointArr) {
-							points.push([pointArr[1], pointArr[0]]);
-						});
-					    rings.push(points);
-					});
-					polygonGeometry = L.multiPolygon(rings);
-					return [polygonGeometry];
-				},
-				type: "rings"
-			}
-		},
-		metaDataUrl = "map/point/pointMetadata.json?v=1",
-		marker = null,
-		clickControl = null,
-		clickListeners = [];
-	
-	return {
-		triggerElevationPlot : function(geometry, label) {
-			var distance = geometry.getLength();
-			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
-		},
-		
-		addMapListener : function(callback, bound) {
-			var alreadyBound = false;
-			clickListeners.forEach(function(obj) {
-				if(obj.callback == callback && obj.bound == bound) {
-					alreadyBound = true;
-				}
-			});
-			if(!alreadyBound) {
-				clickListeners.push({callback : callback, bound : bound});
-			}
-			
-			if(!clickControl) {
-				clickControl = true;
-				mapService.getMap().then(function(map) {
-		            map.on("click", function(e) {
-		               clickListeners.forEach(function(listener) {
-		            	   var callback = listener.callback,
-		            	   		point = {
-		            			   x: e.latlng.lng,
-		            			   y: e.latlng.lat
-		            	   		};
-		            	   
-		            	   point.lat = point.y;
-		            	   point.lng = point.x;
-		                   if(listener.bound) {
-		                	   callback.bind(listener.bound);
-		                   }
-		                   callback(point);
-		                }); 
-		            });
-				});
-			}
-		},
-		
-		getMetaData : function() {
-			return $http.get(metaDataUrl, {cache:true});
-		},
-		
-		moveMarker : function(point) {
-			mapService.getMap().then(function(map) {
-				var size, offset, icon;
-	
-				if(marker) {
-					map.removeLayer(marker);
-				}
-				marker = L.marker(point).addTo(map);
-			});
-			
-		},
-		
-		removeMarker : function() {
-			if(marker) {
-				mapService.getMap().then(function(map) {
-					map.removeLayer(marker);
-					marker = null;					
-				});
-			}			
-		},
-		
-		showPoint : function(point) {
-			$rootScope.$broadcast("map.point.changed", point);
-		},
-		
-		removePoint : function() {
-			$rootScope.$broadcast("map.point.changed", null);
-		},
-		
-		getBehaviour : function(geometryType) {
-			
-		},
-		
-		getInfo : function(point) {
-			return mapService.getMap().then(function(map) {
-				var bounds = map._container.getBoundingClientRect(),
-					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
-					extent = map.getBounds();
-
-				return configService.getConfig("clientSessionId").then(function(id) {			
-					return $http.post(featuresUnderPointUrl, {
-							clientSessionId : id,
-							x:point.x, 
-							y:point.y, 
-							width:bounds.width / ratio, 
-							height:bounds.height / ratio,
-							extent : {
-								left : extent.left,
-								right : extent.right,
-								top: extent.top,
-								bottom: extent.bottom
-					}}).then(function(response) {
-						return response.data;
-					});
-				});
-			});
-		},
-		
-		overFeatures : function(features) {
-			var item;
-			if(!features) {
-				return;
-			}
-			if(angular.isArray(features)) {
-				item = features[0];
-			} else {
-				item = features;
-			}
-			if(item) {
-				item.bringToFront().setStyle({color:"red"});
-			}
-		},
-		
-		outFeatures : function(features) {
-			if(!features) {
-				return;
-			}
-			features.forEach(function(feature) {
-				feature.setStyle({color : '#03f'});
-			}); 			
-		},
-		
-		createLayer : function() {
-			return mapService.getMap().then(function(map) {
-				layer = L.layerGroup();
-				map.addLayer(layer);
-				return layer;
-			});	
-		},
-		
-		removeLayer : function() {		
-			return mapService.getMap().then(function(map) {
-				if(layer) {
-					map.removeLayer(layer);
-				}
-                /* jshint -W093 */
-				return layer = null;
-			});	
-		},
-		
-		createFeature : function(data) {
-			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
-		},
-		
-		showFeature : function(data) {
-			var features = this.createFeature(data);
-			features.forEach(function(feature) {
-				layer.addLayer(feature);				
-			});
-			return features;
-		},
-		
-		hideFeature : function(features) {
-			if(features) {
-				features.forEach(function(feature) {
-					layer.removeLayer(feature);					
-				});
-			}
-		}
-	};
-}])
-
-.filter("dashNull", [function() {
-	return function(value) {
-		if(!value || "Null" == value) {
-			return "-";
-		}
-		return value;
-	};
-}])
-
-.filter("featureGroups", [function() {
-	return function(items) {
-		var groups = [],
-			set = {};
-		if(!items) {
-			return groups;
-		}
-		items.forEach(function(item) {
-			var layerName = item.layerName;
-			if(!set[layerName]) {
-				set[layerName] = true;
-				groups.push(layerName);
-			}
-		});
-		return groups;
-	};
-}])
-
-.filter("filterGroupsByLayername", [function() {
-	return function(items, layerName) {
-		var group = [];
-		if(!items) {
-			return group;
-		}
-		items.forEach(function(item) {
-			if(layerName == item.layerName) {
-				group.push(item);
-			}
-		});
-		return group;
-	};
-}])
-
-
-.controller("OverFeatureCtrl", OverFeatureCtrl);
-
-OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
-function OverFeatureCtrl($filter, pointService) {
-	this.click = function() {
-		console.log("Click");
-	};
-
-	this.mouseenter = function(feature) {
-		console.log("enter");
-		pointService.overFeatures(feature.feature);
-	};
-	
-	this.mouseleave = function(feature) {
-		console.log("leave");
-		pointService.outFeatures(feature.feature);
-	};
-	
-	this.groupEnter = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.overFeatures(feature.feature);
-		});
-	};
-	
-	this.groupLeave = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.outFeatures(feature.feature);
-		});
-	};
-}
-
-})(angular, L, window);
-
 /*
  * Google layer using Google Maps API
  */
@@ -6037,6 +6037,71 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
+L.Control.Legend = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-list',
+	    modal: false
+	},
+	
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
+	    this._container.title = "Show legend";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent
+	            .on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(){
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	this._legend = L.control({position: 'topleft'});
+
+	        	this._legend.onAdd = function (map) {
+	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
+					html = '<img src="resources/img/mapkey_topo2.png"></img>';
+
+	        		div.innerHTML = html;
+	        		return div;
+	        	};
+	        	map.addControl(this._legend);
+	        } else {
+	        	map.removeControl(this._legend);
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.legend = function (options) {
+	return new L.Control.Legend(options);
+};
+	
+})(L);
+
 L.Control.MousePosition = L.Control.extend({
   options: {
     position: 'bottomleft',
@@ -6216,71 +6281,6 @@ L.Control.Zoomout = L.Control.extend({
 L.control.zoomout = function (options) {
   return new L.Control.Zoomout(options);
 };
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Legend = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-list',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
-	    this._container.title = "Show legend";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent
-	            .on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(){
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	this._legend = L.control({position: 'topleft'});
-
-	        	this._legend.onAdd = function (map) {
-	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
-					html = '<img src="resources/img/mapkey_topo2.png"></img>';
-
-	        		div.innerHTML = html;
-	        		return div;
-	        	};
-	        	map.addControl(this._legend);
-	        } else {
-	        	map.removeControl(this._legend);
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.legend = function (options) {
-	return new L.Control.Legend(options);
-};
-	
-})(L);
-
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */

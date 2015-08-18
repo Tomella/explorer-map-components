@@ -46,7 +46,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 	
 	return {
 		restrict:"AE",
-		templateUrl : "map/point/point.html?v=2.7",
+		templateUrl : "map/point/point.html",
 		scope :true,
 		controller : ['$scope', function($scope) {
 			if($scope.options) {
@@ -227,7 +227,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 				type: "rings"
 			}
 		},
-		metaDataUrl = "map/point/pointMetadata.json?v=1",
+		metaDataUrl = "map/point/pointMetadata.json",
 		marker = null,
 		clickControl = null,
 		clickListeners = [];

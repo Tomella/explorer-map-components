@@ -34,7 +34,7 @@ angular.module("geo.elevation", [
 		infoLoading = '<span><img alt="Waiting..." src="resources/img/tinyloader.gif" ng-show="message.spinner" style="position:relative;top:2px;" width="12"></img></span>';	
 	
 	return {
-		templateUrl : "map/elevation/elevation.html?v=2",
+		templateUrl : "map/elevation/elevation.html",
 		scope:true,
 		controller : ['$scope', function($scope) {
 			$scope.paths = [];
