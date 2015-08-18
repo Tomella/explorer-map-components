@@ -1,7 +1,7 @@
 {
-  "name": "explorer-map-components",
+  "name": "ga-explorer-map-components",
   "version": "0.0.0",
-  "description": "Map components to support Geoscience Australia Explorer like apps.",
+  "description": "Geoscience Australia Explorer: Map components",
   "keywords": [
     "angularjs",
     "javascript",
