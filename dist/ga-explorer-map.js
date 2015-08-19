@@ -1062,6 +1062,53 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(angular, L) {
+
+'use strict';
+
+angular.module("explorer.crosshair", ['geo.map'])
+
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+	
+	mapService.getMap().then(function(olMap) { 
+		map = olMap; 
+	});
+	
+	return {		
+		add : function(point) {
+            this.move(point);
+		},
+		
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null; 
+			}
+		},
+		
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
+			});
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
+	};
+}]);
+
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 (function(angular, L){
 	
 'use strict';
@@ -1458,115 +1505,6 @@ angular.module("geo.elevation", [
 });
 
 })(angular, Exp, L);
-(function (angular, google, window) {
-
-'use strict';
-
-angular.module('geo.geosearch', ['ngAutocomplete'])
-
-.directive("expSearch", [function() {
-	return {
-		templateUrl : "components/geosearch/search.html",
-		scope : {
-			hideTo:"="
-		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
-			
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-				
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-							
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}		
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
-			});
-			return deferred.promise;   
-		}
-	};
-}]);
-
-}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1776,6 +1714,115 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
+(function (angular, google, window) {
+
+'use strict';
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+			
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");							
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+				
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+							
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}		
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode'] 
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;   
+		}
+	};
+}]);
+
+}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3580,50 +3627,61 @@ function OverFeatureCtrl($filter, pointService) {
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L) {
+
+(function(L) {
 
 'use strict';
 
-angular.module("explorer.crosshair", ['geo.map'])
-
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
+L.Control.Features = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-location-arrow fa-rotate-180',
+	    modal: false
+	},
 	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
-	});
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
+	    this._container.title = "Show features under point";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(e) {
+	        
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	map.fireEvent("featuresactivate", e);
+	        	L.DomUtil.addClass(this, 'active');
+	        } else {
+	        	map.fireEvent("featuresdeactivate", e);
+	        	L.DomUtil.removeClass(this, 'active');
+			}
+	    });
+        return this._container;
+	},
 	
-	return {		
-		add : function(point) {
-            this.move(point);
-		},
-		
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null; 
-			}
-		},
-		
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
 
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
-}]);
+L.control.features = function (options) {
+	return new L.Control.Features(options);
+};
+	
+})(L);
 
-})(angular, L);
 /*
  * Google layer using Google Maps API
  */
@@ -3885,64 +3943,6 @@ L.Control.Legend = L.Control.extend({
 
 L.control.legend = function (options) {
 	return new L.Control.Legend(options);
-};
-	
-})(L);
-
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Features = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-location-arrow fa-rotate-180',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
-	    this._container.title = "Show features under point";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(e) {
-	        
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	map.fireEvent("featuresactivate", e);
-	        	L.DomUtil.addClass(this, 'active');
-	        } else {
-	        	map.fireEvent("featuresdeactivate", e);
-	        	L.DomUtil.removeClass(this, 'active');
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.features = function (options) {
-	return new L.Control.Features(options);
 };
 	
 })(L);
@@ -4304,9 +4304,9 @@ angular.module("geo.map", [])
 
 
 })(angular, window);
-angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\r\n	<span id=\"baselayerCtrl\">\r\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\r\n	</span>\r\n</span>");
-$templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\r\n	<div class=\"row\">\r\n		<div class=\"col-md-4\">\r\n			<span class=\"graph-brand\">Path Elevation</span>\r\n		</div>	\r\n		<div class=\"col-md-8\">\r\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\r\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\r\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \r\n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\r\n				</div>	\r\n				<div class=\"btn-group\">	\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \r\n							ng-click=\"showInfo = !showInfo\">\r\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>\r\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\r\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>				\r\n				</div>\r\n			</div>\r\n		</div>	\r\n	</div>\r\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\r\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\r\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\r\n</div>");
-$templateCache.put("map/elevation/elevationInfo.html","<div>\r\nThe elevation graph is calculated from the 3\" DEM data. \r\nThe data is held in a grid with a cell size of approx. 90 m. \r\nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \r\n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\r\n<br/>\r\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \r\nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \r\nwater table appear above the elevation of the surface on occasions. \r\nData availability will be indicated by the button labelled \"Show Water Table\". \r\n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\r\n</div>\r\n");
-$templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\r\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\r\n		<div class=\"pathContent\">\r\n			<div ng-repeat=\"(key, feature) in features.data\">\r\n				{{mappings[key].title}}  ({{feature}})\r\n			</div>\r\n			<div ng-hide=\"features.count\">No nearby features</div>\r\n		</div>\r\n	</div>\r\n</div>\r\n");
-$templateCache.put("map/layerinspector/layerInspector.html","<div class=\"interactionPanel\">\r\n	<div class=\"exp-block\" ng-show=\"active\" style=\"height:100%\">\r\n		<div class=\"exp-header\">\r\n			<div class=\"interactionPanelHeader\" ng-hide=\"hidename\">\r\n				<a href=\"javascript:;\" ng-click=\"click()\" ng-show=\"showClose\" title=\"Name is {{name || active.name}}\">{{name || active.name}}</a>\r\n				<span ng-hide=\"showClose\">{{name || active.name}}</span>\r\n			</div>\r\n			<div style=\"float:right\">\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\" \r\n						ng-click=\"toggleShow(active)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!active.displayed), \'fa-eye\':active.displayed}\"></i></a>\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Collapse extra information\" ng-show=\"showClose\"\r\n						ng-click=\"click()\"><i class=\"fa fa-caret-square-o-up\"></i></a>\r\n			</div>\r\n		</div>\r\n		<div>\r\n			<div class=\"thumbNailContainer\" ng-show=\"active.thumbUrl\">\r\n				<img width=\"100\" ng-src=\"{{active.thumbUrl}}\" class=\"img-thumbnail\" alt=\"{{active.description}}\"></img>\r\n			</div>\r\n			<strong>Opacity</strong><br/>\r\n			<span explorer-layer-slider layer=\"active.layer\" title=\"Change the opacity of the selected layer when shown on the map\" class=\"opacitySlider\"></span>\r\n			<p/>\r\n			{{active.description}}\r\n		</div> \r\n	</div>\r\n</div>");
-$templateCache.put("map/point/point.html","<exp-modal class=\"pointInspector ng-cloak\" icon-class=\"fa-map-marker\" is-open=\"point\" on-close=\"clearPoint()\" title=\"Features within approx. 2km\">	\r\n	<div class=\"pointContent\" ng-controller=\"OverFeatureCtrl as over\">\r\n		<div style=\"padding-bottom:7px;\">Elev. {{point.z | length : true}}, Lat. {{point.y | number : 3}}&deg;, Long. {{point.x | number:3}}&deg;</div>\r\n		<div ng-show=\"featuresInfo.results.length > 0\">\r\n			<div>\r\n				<div style=\"float:left; padding-bottom:10px\">{{allHidden() && \"Show\" || \"Hide\"}} all features</div>\r\n				<div style=\"float: right\">				\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show all features on map\"\r\n						ng-click=\"toggleAll()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':allHidden(), \'fa-eye\':!allHidden()}\"></i></a>\r\n				</div>\r\n			</div>\r\n			<div style=\"clear:both;\"></div>\r\n		</div>\r\n		<div ng-hide=\"featuresInfo.results.length > 0\">No nearby features.</div>\r\n	\r\n		<div ng-repeat=\"item in featuresInfo.results | featureGroups\" ng-class=\"{\'underlined\':!$last}\">\r\n			<div ng-show=\"greaterThanOneItem()\"  ng-mouseover=\"over.groupEnter(featuresInfo.results, item)\" ng-mouseout=\"over.groupLeave(featuresInfo.results, item)\">\r\n				<div style=\"float:left\">\r\n					<button type=\"button\" class=\"undecorated\" ng-click=\"expanded = !expanded\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':expanded,\'fa-caret-right\':(!expanded)}\"></i></button></button><strong>{{metadata[item].heading}}</strong>\r\n				</div>\r\n				<div style=\"float: right\">	\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"   \r\n						ng-click=\"groupShow(item)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!oneShowing()), \'fa-eye\':oneShowing()}\"></i></a>\r\n				</div>\r\n				<div style=\"clear:both;\"></div>\r\n			</div>\r\n			<div ng-repeat=\"feature in featuresInfo.results | filterGroupsByLayername : item\" ng-show=\"expanded || !greaterThanOneItem()\">\r\n				<div ng-mouseover=\"over.mouseenter(feature)\" ng-mouseout=\"over.mouseleave(feature)\" ng-click=\"over.click()\">\r\n					<div style=\"float: left;\" ng-class=\"{\'pad-left-big\':greaterThanOneItem()}\">\r\n						<button type=\"button\" ng-click=\"feature.expanded = !feature.expanded\" class=\"undecorated\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':feature.expanded,\'fa-caret-right\':(!feature.expanded)}\"></i></button>\r\n						<a href=\"javascript:;\" class=\"featureLink\" title=\"{{metadata[feature.layerName].description}}\"\r\n							ng-click=\"makeFeatureActive()\" ng-class=\"{active:(feature.active)}\">{{createTitle()}}</a>\r\n					</div>\r\n					<div style=\"float: right\">	\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Graph elevation changes for feature\'s path.\"\r\n							ng-click=\"elevationPath(metadata[feature.layerName].label + \' elevation plot\')\"><i class=\"fa fa-align-left fa-rotate-270\" ng-show=\"feature.geometryType == \'esriGeometryPolyline\'\"></i></a>					\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"\r\n							ng-click=\"toggleShow(feature)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!feature.displayed), \'fa-eye\':feature.displayed}\"></i> </a>\r\n					</div>\r\n				</div>\r\n				<div style=\"clear:both;\" ng-init=\"featureMeta = metadata[feature.layerName]\">\r\n					<div ng-repeat=\"attribute in featureMeta.attributes\" ng-show=\"feature.expanded\">\r\n						<div style=\"width:7em;float:left;font-weight:bold;padding-left:9px\">{{attribute.label}}</div>\r\n						<div style=\"min-width:12em;width:12em;margin-left:7.5em;\" class=\"ellipsis\" title=\"{{feature.attributes[attribute.key]}}\">{{feature.attributes[attribute.key] | dashNull}}</div>\r\n					</div>\r\n					<div style=\"border-bottom:1px solid lightgray\" ng-show=\"feature.expanded && !last\"></div>\r\n				</div>\r\n			</div>	\r\n		</div>\r\n	</div>\r\n</exp-modal>");}]);
+angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\n	<span id=\"baselayerCtrl\">\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\n	</span>\n</span>");
+$templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\n	<div class=\"row\">\n		<div class=\"col-md-4\">\n			<span class=\"graph-brand\">Path Elevation</span>\n		</div>	\n		<div class=\"col-md-8\">\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\n				</div>	\n				<div class=\"btn-group\">	\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \n							ng-click=\"showInfo = !showInfo\">\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\n					</button>\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\n					</button>				\n				</div>\n			</div>\n		</div>	\n	</div>\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\n</div>");
+$templateCache.put("map/elevation/elevationInfo.html","<div>\nThe elevation graph is calculated from the 3\" DEM data. \nThe data is held in a grid with a cell size of approx. 90 m. \nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\n<br/>\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \nwater table appear above the elevation of the surface on occasions. \nData availability will be indicated by the button labelled \"Show Water Table\". \n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\n</div>\n");
+$templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\n		<div class=\"pathContent\">\n			<div ng-repeat=\"(key, feature) in features.data\">\n				{{mappings[key].title}}  ({{feature}})\n			</div>\n			<div ng-hide=\"features.count\">No nearby features</div>\n		</div>\n	</div>\n</div>\n");
+$templateCache.put("map/layerinspector/layerInspector.html","<div class=\"interactionPanel\">\n	<div class=\"exp-block\" ng-show=\"active\" style=\"height:100%\">\n		<div class=\"exp-header\">\n			<div class=\"interactionPanelHeader\" ng-hide=\"hidename\">\n				<a href=\"javascript:;\" ng-click=\"click()\" ng-show=\"showClose\" title=\"Name is {{name || active.name}}\">{{name || active.name}}</a>\n				<span ng-hide=\"showClose\">{{name || active.name}}</span>\n			</div>\n			<div style=\"float:right\">\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\" \n						ng-click=\"toggleShow(active)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!active.displayed), \'fa-eye\':active.displayed}\"></i></a>\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Collapse extra information\" ng-show=\"showClose\"\n						ng-click=\"click()\"><i class=\"fa fa-caret-square-o-up\"></i></a>\n			</div>\n		</div>\n		<div>\n			<div class=\"thumbNailContainer\" ng-show=\"active.thumbUrl\">\n				<img width=\"100\" ng-src=\"{{active.thumbUrl}}\" class=\"img-thumbnail\" alt=\"{{active.description}}\"></img>\n			</div>\n			<strong>Opacity</strong><br/>\n			<span explorer-layer-slider layer=\"active.layer\" title=\"Change the opacity of the selected layer when shown on the map\" class=\"opacitySlider\"></span>\n			<p/>\n			{{active.description}}\n		</div> \n	</div>\n</div>");
+$templateCache.put("map/point/point.html","<exp-modal class=\"pointInspector ng-cloak\" icon-class=\"fa-map-marker\" is-open=\"point\" on-close=\"clearPoint()\" title=\"Features within approx. 2km\">	\n	<div class=\"pointContent\" ng-controller=\"OverFeatureCtrl as over\">\n		<div style=\"padding-bottom:7px;\">Elev. {{point.z | length : true}}, Lat. {{point.y | number : 3}}&deg;, Long. {{point.x | number:3}}&deg;</div>\n		<div ng-show=\"featuresInfo.results.length > 0\">\n			<div>\n				<div style=\"float:left; padding-bottom:10px\">{{allHidden() && \"Show\" || \"Hide\"}} all features</div>\n				<div style=\"float: right\">				\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show all features on map\"\n						ng-click=\"toggleAll()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':allHidden(), \'fa-eye\':!allHidden()}\"></i></a>\n				</div>\n			</div>\n			<div style=\"clear:both;\"></div>\n		</div>\n		<div ng-hide=\"featuresInfo.results.length > 0\">No nearby features.</div>\n	\n		<div ng-repeat=\"item in featuresInfo.results | featureGroups\" ng-class=\"{\'underlined\':!$last}\">\n			<div ng-show=\"greaterThanOneItem()\"  ng-mouseover=\"over.groupEnter(featuresInfo.results, item)\" ng-mouseout=\"over.groupLeave(featuresInfo.results, item)\">\n				<div style=\"float:left\">\n					<button type=\"button\" class=\"undecorated\" ng-click=\"expanded = !expanded\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':expanded,\'fa-caret-right\':(!expanded)}\"></i></button></button><strong>{{metadata[item].heading}}</strong>\n				</div>\n				<div style=\"float: right\">	\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"   \n						ng-click=\"groupShow(item)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!oneShowing()), \'fa-eye\':oneShowing()}\"></i></a>\n				</div>\n				<div style=\"clear:both;\"></div>\n			</div>\n			<div ng-repeat=\"feature in featuresInfo.results | filterGroupsByLayername : item\" ng-show=\"expanded || !greaterThanOneItem()\">\n				<div ng-mouseover=\"over.mouseenter(feature)\" ng-mouseout=\"over.mouseleave(feature)\" ng-click=\"over.click()\">\n					<div style=\"float: left;\" ng-class=\"{\'pad-left-big\':greaterThanOneItem()}\">\n						<button type=\"button\" ng-click=\"feature.expanded = !feature.expanded\" class=\"undecorated\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':feature.expanded,\'fa-caret-right\':(!feature.expanded)}\"></i></button>\n						<a href=\"javascript:;\" class=\"featureLink\" title=\"{{metadata[feature.layerName].description}}\"\n							ng-click=\"makeFeatureActive()\" ng-class=\"{active:(feature.active)}\">{{createTitle()}}</a>\n					</div>\n					<div style=\"float: right\">	\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Graph elevation changes for feature\'s path.\"\n							ng-click=\"elevationPath(metadata[feature.layerName].label + \' elevation plot\')\"><i class=\"fa fa-align-left fa-rotate-270\" ng-show=\"feature.geometryType == \'esriGeometryPolyline\'\"></i></a>					\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"\n							ng-click=\"toggleShow(feature)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!feature.displayed), \'fa-eye\':feature.displayed}\"></i> </a>\n					</div>\n				</div>\n				<div style=\"clear:both;\" ng-init=\"featureMeta = metadata[feature.layerName]\">\n					<div ng-repeat=\"attribute in featureMeta.attributes\" ng-show=\"feature.expanded\">\n						<div style=\"width:7em;float:left;font-weight:bold;padding-left:9px\">{{attribute.label}}</div>\n						<div style=\"min-width:12em;width:12em;margin-left:7.5em;\" class=\"ellipsis\" title=\"{{feature.attributes[attribute.key]}}\">{{feature.attributes[attribute.key] | dashNull}}</div>\n					</div>\n					<div style=\"border-bottom:1px solid lightgray\" ng-show=\"feature.expanded && !last\"></div>\n				</div>\n			</div>	\n		</div>\n	</div>\n</exp-modal>");}]);
