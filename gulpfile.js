@@ -27,7 +27,7 @@ gulp.task('lint', function() {
 
 //Concatenate & Minify JS
 gulp.task('scripts', function() {
- return gulp.src('source/map/**/*.js')
+ return gulp.src(['source/map/util/util.js','source/map/**/*.js'])
  	 .pipe(addStream.obj(prepareTemplates()))
      .pipe(concat('ga-explorer-map.js'))
      .pipe(gulp.dest('dist'))
@@ -61,6 +61,6 @@ gulp.task('default', ['lint', 'scripts', 'concatCss', 'vendors', 'watch']);
 
 function prepareTemplates() {
    return gulp.src('source/map/**/*.html')
-      .pipe(templateCache({root:"map", module:"exp.map.templates", standalone : true}));
+      .pipe(templateCache({root:"map", module:"explorer.map.templates", standalone : true}));
 }
 
