@@ -1062,53 +1062,6 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L) {
-
-'use strict';
-
-angular.module("explorer.crosshair", ['geo.map'])
-
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
-	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
-	});
-	
-	return {		
-		add : function(point) {
-            this.move(point);
-		},
-		
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null; 
-			}
-		},
-		
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
-
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
-}]);
-
-})(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 
 (function(angular){
 'use strict';
@@ -1208,6 +1161,53 @@ angular.module("geo.draw", ['geo.map'])
 }]);
 
 })(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L) {
+
+'use strict';
+
+angular.module("explorer.crosshair", ['geo.map'])
+
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+	
+	mapService.getMap().then(function(olMap) { 
+		map = olMap; 
+	});
+	
+	return {		
+		add : function(point) {
+            this.move(point);
+		},
+		
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null; 
+			}
+		},
+		
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
+			});
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
+	};
+}]);
+
+})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2126,6 +2126,42 @@ angular.module("explorer.layer.slider", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(angular) {
+'use strict';
+
+angular.module("explorer.mapstate", [])
+
+.factory('mapStateService', ['$log', 'mapService', 'persistService', function($log, mapService, persistService) {
+	/*
+	 * This state is for the map. It keeps all the details in the 
+	 * localStorage so that it 
+	 */
+	var lastTime = 2400000000000;
+	return {		
+		persist : function() {
+			var now = Date.now();
+			if(lastTime - 100 > now) {
+				persistService.setItem('marsMapTab', mapService.getState());
+			} else {
+				// $log.debug("We got a request too quickly");
+			}
+			lastTime = now;
+		},
+		
+		restore : function() {
+			persistService.getItem("marsMapTab").then(function(state) {
+				if(state) {
+					mapService.setState(state);
+				}
+			});
+		}
+	};
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 
 (function (angular, window, L) {
 
@@ -2188,42 +2224,6 @@ angular.module('geo.maphelper', ['geo.map'])
 }]);
 
 })(angular, window, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular) {
-'use strict';
-
-angular.module("explorer.mapstate", [])
-
-.factory('mapStateService', ['$log', 'mapService', 'persistService', function($log, mapService, persistService) {
-	/*
-	 * This state is for the map. It keeps all the details in the 
-	 * localStorage so that it 
-	 */
-	var lastTime = 2400000000000;
-	return {		
-		persist : function() {
-			var now = Date.now();
-			if(lastTime - 100 > now) {
-				persistService.setItem('marsMapTab', mapService.getState());
-			} else {
-				// $log.debug("We got a request too quickly");
-			}
-			lastTime = now;
-		},
-		
-		restore : function() {
-			persistService.getItem("marsMapTab").then(function(state) {
-				if(state) {
-					mapService.setState(state);
-				}
-			});
-		}
-	};
-}]);
-
-})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3717,6 +3717,71 @@ L.control.features = function (options) {
 	
 })(L);
 
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
+L.Control.Legend = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-list',
+	    modal: false
+	},
+	
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
+	    this._container.title = "Show legend";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent
+	            .on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(){
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	this._legend = L.control({position: 'topleft'});
+
+	        	this._legend.onAdd = function (map) {
+	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
+					html = '<img src="resources/img/mapkey_topo2.png"></img>';
+
+	        		div.innerHTML = html;
+	        		return div;
+	        	};
+	        	map.addControl(this._legend);
+	        } else {
+	        	map.removeControl(this._legend);
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.legend = function (options) {
+	return new L.Control.Legend(options);
+};
+	
+})(L);
+
 /*
  * Google layer using Google Maps API
  */
@@ -3917,71 +3982,6 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Legend = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-list',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
-	    this._container.title = "Show legend";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent
-	            .on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(){
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	this._legend = L.control({position: 'topleft'});
-
-	        	this._legend.onAdd = function (map) {
-	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
-					html = '<img src="resources/img/mapkey_topo2.png"></img>';
-
-	        		div.innerHTML = html;
-	        		return div;
-	        	};
-	        	map.addControl(this._legend);
-	        } else {
-	        	map.removeControl(this._legend);
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.legend = function (options) {
-	return new L.Control.Legend(options);
-};
-	
-})(L);
-
 L.Control.MousePosition = L.Control.extend({
   options: {
     position: 'bottomleft',
@@ -4180,7 +4180,7 @@ L.control.zoomout = function (options) {
 
 angular.module("geo.map", [])
 
-.directive("geoMap", ["$rootScope", "mapService", "waiting", function($rootScope, mapService, waiting) {
+.directive("geoMap", ["mapService", "waiting", function(mapService, waiting) {
 	var waiters;
 	
 	return {
@@ -4211,6 +4211,7 @@ angular.module("geo.map", [])
 					}
 				}
 			});
+			
 		}
 	};
 }])
@@ -4221,11 +4222,10 @@ angular.module("geo.map", [])
 		lastMap,
 		pseudoBaseLayers = [],
 		waiters,
+		layerControl,
+		groups = {},
 		service = {
 			maps: {}
-		},
-		layerLookup = {
-			WMS : []
 		};
 	
 	service.getMap = function(name) {
@@ -4242,10 +4242,26 @@ angular.module("geo.map", [])
 		}
 		return waiters.waiter().promise;	
 	};
+
+	service.addToGroup = function(layer, groupName) {
+		this.getMap().then(function(map) { 
+			var group = groups[groupName];
+			if(group) {
+				addLayer(layer, group, map);
+			}
+		});
+	};
+	
+	service.removeFromGroup = function(data, groupName) {
+		var group = groups[groupName];
+		if(group) {
+			group.removeLayer(data.layer);
+			data.layer = null;
+		}
+	};
 	
 	service.addMap = function(config) {
-		var layerControl = null,
-			map,
+		var map,
 			zoomControl;
 		
 		if(!config.name) {
@@ -4255,24 +4271,20 @@ angular.module("geo.map", [])
 		lastMap = config.name;
 		
 		map = service.maps[config.name] = new L.Map(config.element, {center: config.options.center, zoom: config.options.zoom});
-		
+
 		if(config.layers) {
 			config.layers.forEach(function(layer) {
-				var leafLayer = expandLayer(layer);
-				leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;
-				
-				if(layer.addLayerControl) {
-					if(!layerControl) {
-						layerControl = {};
-					} 
-					layerControl[layer.name] = leafLayer;
-				}
-				if(layer.defaultLayer || layer.pseudoBaseLayer) {
-					map.addLayer(leafLayer);
-				}
-				
-				if(layerControl) {
-					map.addControl(new L.Control.Layers( layerControl, {}));
+				var group;
+				if(layer.type == "LayerGroup") {
+					if(layer.layers) {
+						groups[layer.name] = group = L.layerGroup([]);
+						layer.layers.forEach(function(child) {
+							addLayer(child, map, group);
+						});
+						map.addLayer(group);
+					}					
+				} else {
+					addLayer(layer, map, map);
 				}
 			});
 		}
@@ -4281,7 +4293,7 @@ angular.module("geo.map", [])
 		L.control.mousePosition({
 				position:"bottomright", 
 				emptyString:"",
-				separator : " ",
+				seperator : " ",
 				latFormatter : function(lat) {
 					return "Lat " + L.Util.formatNum(lat, 5) + "°";
 				},
@@ -4311,15 +4323,28 @@ angular.module("geo.map", [])
 		
 	};
 	
-	service.zoomTo = function(y, x) {
-		this.getMap().then(function(map) {
-			map.panTo([y, x], {animate: true});
-		});
-	};
-	
 	return service;
 	
-
+	function addLayer(layer, target, map) {
+		var leafLayer = expandLayer(layer);
+		leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;
+		
+		if(layer.addLayerControl) {
+			if(!layerControl) {
+				layerControl = {};
+			} 
+			layerControl[layer.name] = leafLayer;
+		}
+		if(layer.defaultLayer || layer.pseudoBaseLayer) {
+			target.addLayer(leafLayer);
+		}
+		
+		if(layerControl) {
+			map.addControl(new L.Control.Layers( layerControl, {}));
+		}
+		layer.layer = leafLayer;
+	}
+	
 	function expandLayer(data) {
 		var Clazz = [];
 		if(angular.isArray(data.type)) {
@@ -4335,8 +4360,8 @@ angular.module("geo.map", [])
 		} 
 		return new Clazz();
 	}
+	
 }]);
-
 
 })(angular, window);
 angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\n	<span id=\"baselayerCtrl\">\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\n	</span>\n</span>");

@@ -4,7 +4,7 @@
 
 angular.module("geo.map", [])
 
-.directive("geoMap", ["$rootScope", "mapService", "waiting", function($rootScope, mapService, waiting) {
+.directive("geoMap", ["mapService", "waiting", function(mapService, waiting) {
 	var waiters;
 	
 	return {
@@ -35,6 +35,7 @@ angular.module("geo.map", [])
 					}
 				}
 			});
+			
 		}
 	};
 }])
@@ -45,11 +46,10 @@ angular.module("geo.map", [])
 		lastMap,
 		pseudoBaseLayers = [],
 		waiters,
+		layerControl,
+		groups = {},
 		service = {
 			maps: {}
-		},
-		layerLookup = {
-			WMS : []
 		};
 	
 	service.getMap = function(name) {
@@ -66,10 +66,26 @@ angular.module("geo.map", [])
 		}
 		return waiters.waiter().promise;	
 	};
+
+	service.addToGroup = function(layer, groupName) {
+		this.getMap().then(function(map) { 
+			var group = groups[groupName];
+			if(group) {
+				addLayer(layer, group, map);
+			}
+		});
+	};
+	
+	service.removeFromGroup = function(data, groupName) {
+		var group = groups[groupName];
+		if(group) {
+			group.removeLayer(data.layer);
+			data.layer = null;
+		}
+	};
 	
 	service.addMap = function(config) {
-		var layerControl = null,
-			map,
+		var map,
 			zoomControl;
 		
 		if(!config.name) {
@@ -79,24 +95,20 @@ angular.module("geo.map", [])
 		lastMap = config.name;
 		
 		map = service.maps[config.name] = new L.Map(config.element, {center: config.options.center, zoom: config.options.zoom});
-		
+
 		if(config.layers) {
 			config.layers.forEach(function(layer) {
-				var leafLayer = expandLayer(layer);
-				leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;
-				
-				if(layer.addLayerControl) {
-					if(!layerControl) {
-						layerControl = {};
-					} 
-					layerControl[layer.name] = leafLayer;
-				}
-				if(layer.defaultLayer || layer.pseudoBaseLayer) {
-					map.addLayer(leafLayer);
-				}
-				
-				if(layerControl) {
-					map.addControl(new L.Control.Layers( layerControl, {}));
+				var group;
+				if(layer.type == "LayerGroup") {
+					if(layer.layers) {
+						groups[layer.name] = group = L.layerGroup([]);
+						layer.layers.forEach(function(child) {
+							addLayer(child, map, group);
+						});
+						map.addLayer(group);
+					}					
+				} else {
+					addLayer(layer, map, map);
 				}
 			});
 		}
@@ -105,7 +117,7 @@ angular.module("geo.map", [])
 		L.control.mousePosition({
 				position:"bottomright", 
 				emptyString:"",
-				separator : " ",
+				seperator : " ",
 				latFormatter : function(lat) {
 					return "Lat " + L.Util.formatNum(lat, 5) + "°";
 				},
@@ -135,15 +147,28 @@ angular.module("geo.map", [])
 		
 	};
 	
-	service.zoomTo = function(y, x) {
-		this.getMap().then(function(map) {
-			map.panTo([y, x], {animate: true});
-		});
-	};
-	
 	return service;
 	
-
+	function addLayer(layer, target, map) {
+		var leafLayer = expandLayer(layer);
+		leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;
+		
+		if(layer.addLayerControl) {
+			if(!layerControl) {
+				layerControl = {};
+			} 
+			layerControl[layer.name] = leafLayer;
+		}
+		if(layer.defaultLayer || layer.pseudoBaseLayer) {
+			target.addLayer(leafLayer);
+		}
+		
+		if(layerControl) {
+			map.addControl(new L.Control.Layers( layerControl, {}));
+		}
+		layer.layer = leafLayer;
+	}
+	
 	function expandLayer(data) {
 		var Clazz = [];
 		if(angular.isArray(data.type)) {
@@ -159,7 +184,7 @@ angular.module("geo.map", [])
 		} 
 		return new Clazz();
 	}
+	
 }]);
-
 
 })(angular, window);
