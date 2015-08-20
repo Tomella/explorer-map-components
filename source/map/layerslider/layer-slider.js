@@ -26,7 +26,11 @@ angular.module("explorer.layer.slider", [])
 			});
 
 			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
-				scope.slider.opacity = newValue;
+				if(typeof newValue != "undefined" && typeof oldValue != "undefined") {
+					scope.slider.opacity = newValue;
+				} else if(scope.layer && typeof oldValue == "undefined"){
+					scope.layer.setOpacity(scope.slider.opacity);
+				}
 			});
 		}
 	};	
