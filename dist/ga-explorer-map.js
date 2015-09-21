@@ -1062,6 +1062,53 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(angular, L) {
+
+'use strict';
+
+angular.module("explorer.crosshair", ['geo.map'])
+
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+	
+	mapService.getMap().then(function(olMap) { 
+		map = olMap; 
+	});
+	
+	return {		
+		add : function(point) {
+            this.move(point);
+		},
+		
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null; 
+			}
+		},
+		
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
+			});
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
+	};
+}]);
+
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 
 (function(angular){
 'use strict';
@@ -1145,14 +1192,25 @@ angular.module("geo.draw", ['geo.map'])
 			});
 		},
 		
-		drawRectangle : function() {
+		cancelDrawRectangle : function() {
 			if(rectangleDeferred) {
 				rectangleDeferred.reject();
-				rectangleDeferred = $q.defer();
+				rectangleDeferred = null;
+				if(drawer) {
+					drawer.disable();
+				}
+			}
+		},
+		
+		drawRectangle : function() {
+			this.cancelDrawRectangle();
+			rectangleDeferred = $q.defer();
+			if(drawer) {
+				drawer.enable();
 			} else {
-				rectangleDeferred = $q.defer();
 				mapService.getMap().then(function(map) {
-					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline).enable();
+					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline);
+					drawer.enable();
 				});
 			}			
 			return rectangleDeferred.promise;
@@ -1161,53 +1219,6 @@ angular.module("geo.draw", ['geo.map'])
 }]);
 
 })(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular, L) {
-
-'use strict';
-
-angular.module("explorer.crosshair", ['geo.map'])
-
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
-	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
-	});
-	
-	return {		
-		add : function(point) {
-            this.move(point);
-		},
-		
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null; 
-			}
-		},
-		
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
-
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
-}]);
-
-})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1417,338 +1428,6 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-/**
- * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
- */
-(function(angular, Exp, L) {
-'use strict';
-
-angular.module("geo.elevation", [
-                                  'graph',
-                                  'explorer.crosshair',
-                                  'explorer.flasher',
-                                  'explorer.feature.summary',
-                                  'geo.map',
-                                  'geo.path'])
-
-.directive("pathElevationPlot", ['$log', '$timeout', '$rootScope','$filter', 'elevationService', 'crosshairService',   'featureSummaryService',
-             function($log, $timeout, $rootScope, $filter, elevationService, crosshairService, featureSummaryService) {
-	var WIDTH = 1000,
-		HEIGHT = 90,
-		elevationStyle = {
-			fill:"orange",
-			fillOpacity : 0.4,
-			stroke : "darkred",
-			strokeWidth : 1.5
-		},
-		waterTableStyle = {
-			fill:"lightblue",
-			fillOpacity:0.8,
-			stroke:"darkblue",
-			strokeWidth : 1.5
-		},
-		infoLoading = '<span><img alt="Waiting..." src="resources/img/tinyloader.gif" ng-show="message.spinner" style="position:relative;top:2px;" width="12"></img></span>';	
-	
-	return {
-		templateUrl : "map/elevation/elevation.html",
-		scope:true,
-		controller : ['$scope', function($scope) {
-			$scope.paths = [];
-			$scope.config = {
-					yLabel : "Elevation (m)",
-					xLabel : "Distance: 3000m"
-			};
-			
-			$rootScope.$on("elevation.plot.data", function(event, data) {
-				$scope.length = data.length;
-				$scope.geometry = data.geometry;
-				$scope.config.xLabel = "Distance: " + data.length.toFixed(1) + "m";
-				$scope.waterTable = null;
-			
-				if($scope.length && $scope.geometry) {
-					elevationService.getElevation($scope.geometry, $scope.length).then(function(elevation) {
-						// Keep a handle on it as we will generally build a collection after the first build
-						$scope.elevation = {
-								style: elevationStyle,
-								data: elevation
-						};
-						// Show the range.
-						$scope.config.leftText = "Elevation Range: " + 
-							$filter("length")(d3.min(elevation, function(d) { return d.z; }), true) + " - " + 
-							$filter("length")(d3.max(elevation, function(d) { return d.z; }), true);
-					
-						// If we got here we always want to wipe out existing paths.						
-						$scope.paths = [$scope.elevation];
-					});
-
-					elevationService.intersectsWaterTable($scope.geometry).then(function(intersects) {
-						$scope.intersectsWaterTable = intersects;
-					});
-				}
-			});	
-		
-			$scope.getInfoText = function() {
-				if(!$scope.infoText) {
-					$scope.infoText = infoLoading;
-					elevationService.getInfoText().then(function(html) {
-						$scope.infoText = html;
-					});
-				}
-			};
-			
-			$scope.toggleWaterTable = function() {
-				var length = $scope.paths.length;
-				// We have to clear the paths so that it re-renders from scratch.
-				$scope.paths = [];
-				// Then we re-render on the next animation frame.
-				if($scope.waterTable) {
-					$timeout(function() {
-						if(length == 1) {
-							$scope.paths = [$scope.elevation, $scope.waterTable];
-						} else {
-							$scope.paths = [$scope.elevation];
-						}
-					});
-				} else {
-					elevationService.getWaterTable($scope.geometry, $scope.length).then(function(waterTable) {
-						$scope.waterTable = {
-								style : waterTableStyle,
-								data : waterTable
-						};
-						$scope.paths = [$scope.elevation, $scope.waterTable];							
-					});
-				}
-			};
-
-			$scope.close = function() {
-				$scope.paths = $scope.geometry = $scope.length = null;
-			};
-		}],
-
-		link : function(scope, element) {				
-			scope.graphClick = function(event) {
-				if(event.position) {
-					var point = event.position.points[0].point;
-					elevationService.panToPoint(point);
-					scope.point = point;
-				}				
-			};
-
-			scope.graphLeave = function(event) {
-				scope.position = null;
-				crosshairService.remove();
-				cancelDeferredView();
-				$log.debug("Mouse left");
-				if(scope.mapListener) {
-					$log.info("offMapMove");
-					featureSummaryService.offMapMove(scope.mapListener);
-				}
-			};
-
-			scope.graphEnter = function(event) {
-				$log.debug("Graph be entered");
-			};
-
-			scope.graphMove = function(event) {
-				var point;
-				
-				scope.position = event.position;
-				
-				if(scope.position) {
-					point = scope.position.point;
-					scope.position.markerLonlat = crosshairService.move(point);
-					deferredView();
-				}
-				if(!scope.mapListener) {
-					scope.mapListener = function() {
-						cancelDeferredView();
-						deferredView();
-					};
-					$log.info("onMapMove");
-					featureSummaryService.onMapMove(scope.mapListener);
-				}
-				$log.debug("Mouse moving...");
-			};
-
-			scope.$watch("geometry", processGeometry);
-			
-			function processGeometry() {
-				if(scope.line) {
-					scope.line = elevationService.pathHide(scope.line);
-				}
-				if(scope.geometry) {
-					scope.line = elevationService.pathShow(scope.geometry);
-				} else {
-					elevationService.hideWaterTable();
-				}
-			
-			}
-			
-			function deferredView() {
-				$log.info("Deferred view");
-				featureSummaryService.deferView(scope.position).then(function(data) {
-					scope.featuresUnderPoint = data;
-				});
-			}
-			
-			function cancelDeferredView() {
-				$log.info("Cancel deferred view");
-				featureSummaryService.cancelView();
-				scope.featuresUnderPoint = null;
-			}
-		}
-	};
-}])
-
-.directive('marsInfoElevation', ['$log', 'elevationService', function($log, elevationService){
-	return {
-		templateUrl:"map/elevation/elevationInfo.html",
-		scope:true,
-		link : function(scope, element) {
-			scope.toggleWaterTableShowing = function() {
-				scope.state = elevationService.getState();
-				
-				if(!elevationService.isWaterTableShowing()) {
-					elevationService.showWaterTable();
-				} else {
-					elevationService.hideWaterTable();
-				}
-			};
-		}
-	};
-}]) 
-
-.provider("elevationService", function ConfigServiceProvider() {
-	var pointCount = 500,
-		elevationUrl = "service/path/elevation",
-		waterTableUrl = "service/path/waterTable",
-		artesianBasinKmlUrl = "service/artesianBasin/geometry/kml",
-		intersectUrl = "service/artesianBasin/intersects",
-		waterTableLayer = null,
-		map,
-		state = {
-			isWaterTableShowing : false
-		};
-		
-	this.setIntersectUrl = function(url) {
-		intersectUrl = url;
-	};
-
-	this.setKmlUrl = function(url) {
-		artesianBasinKmlUrl = url;
-	};
-
-	this.setElevationUrl = function(url) {
-		elevationUrl = url;
-	};
-
-	this.setWaterTableUrl = function(url) {
-		waterTableUrl = url;
-	};
-	
-	this.$get = ['$log', '$http', '$q', 'mapService', 'flashService', function($log, $http, $q, mapService, flashService) {
-
-		// We are safe doing this as it can't be triggered until the map is drawn anyway.
-		mapService.getMap().then(function(olMap) {map = olMap;});
-
-		var $elevation = {
-			panToPoint : function(point) {
-				mapService.zoomTo(point.y, point.x);
-			},
-	
-			getState : function() {
-				return state;
-			},
-			
-			getElevation : function(geometry, distance) {
-				var flasher = flashService.add("Retrieving elevation details...", 8000),
-					wktStr = Exp.Util.toLineStringWkt(geometry);
-
-				return $http.post(elevationUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
-					flashService.remove(flasher);
-					return response.data;
-				});	
-			},
-	
-			intersectsWaterTable :function(geometry) {
-				var url = intersectUrl + (intersectUrl.indexOf("?") > -1?"":"?wkt=");
-				return $http.get(url + Exp.Util.toLineStringWkt(geometry), {cache:true}).then(function(response) {
-					return response.data.intersects;
-				});
-			},
-		
-			isWaterTableShowing : function() {
-                /* jshint -W093 */
-				return state.isWaterTableShowing = waterTableLayer !== null;
-			},
-			
-			showWaterTable : function() {
-				if(!waterTableLayer) {
-					this.getWaterTableLayer().then(function(layer) {
-						layer.addTo(map);
-					});
-				}
-				state.isWaterTableShowing = true;
-			},
-	
-			hideWaterTable : function() {
-				if(waterTableLayer) {
-					map.removeLayer(waterTableLayer);
-				}
-				waterTableLayer = null;
-				state.isWaterTableShowing = false;
-			},
-		
-			createWaterTableLayer : function() {
-				return mapService.getMap().then(function(map) {
-					var kml = new L.KML(artesianBasinKmlUrl, {async: true});
-				
-					return kml.on("loaded", function(e) {
-						waterTableLayer = e.target;
-						return waterTableLayer;
-					});				
-				});			
-			},
-		
-			getWaterTableLayer : function() {
-				return this.createWaterTableLayer();
-			},
-	
-			getWaterTable : function(geometry, distance) {
-				var flasher = flashService.add("Retrieving water table details...", 8000),
-					wktStr = Exp.Util.toLineStringWkt(geometry);
-
-				return $http.post(waterTableUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
-					flashService.remove(flasher);
-					return response.data;
-				});
-			},
-	
-			getInfoText : function() {
-				return $http("map/elevation/elevationInfo.html", {cache : true}).then(function(response) {
-					return response.data;
-				});
-			},
-	
-			pathShow : function(latlngs) {
-				var lineLayer = L.polyline(latlngs, {color: 'black', weight:2}).addTo(map);
-				return lineLayer;
-			},
-	
-			pathHide : function(lineLayer) {
-				map.removeLayer(lineLayer);
-				return null;
-			}		
-		};
-		
-		return $elevation;
-	}];
-});
-
-})(angular, Exp, L);
 (function (angular, google, window) {
 
 'use strict';
@@ -2198,33 +1877,6 @@ angular.module('geo.maphelper', ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-
-(function(angular){
-'use strict';
-
-angular.module("geo.measure", [])
-
-.directive("geoMeasure", ['$log', function($log) {
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		link : function(scope, element, attrs, ctrl) {
-			ctrl.getMap().then(function(map) {
-				L.Control.measureControl().addTo(map);
-				// TODO. See if it is useful
-				map.on("draw:drawstop", function(data) {
-					$log.info("Draw stopped");
-					$log.info(data);
-				});
-			});
-		}
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular) {
 'use strict';
 
@@ -2261,481 +1913,30 @@ angular.module("explorer.mapstate", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L, window) {
+
+(function(angular){
 'use strict';
 
-angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
+angular.module("geo.measure", [])
 
-.directive("expPoint", ['pointService', function(pointService) {
+.directive("geoMeasure", ['$log', function($log) {
 	return {
-		scope : {
-			data : "=point"
-		},		
-		controller : ['$scope', function($scope) {
-			$scope.$watch("data", function(newData, oldData) {
-				if(newData || oldData) {
-					pointService.showPoint($scope.data);
-				}
-			});
-		}]
-	};
-}])
-
-.directive("expClickMapPoint", ['pointService', function(pointService) {
-	return {
-		restrict:'AE',
-		scope : {
-		},		
-		link : function(scope, element) {
-			pointService.addMapListener(function(latlon) {
-				pointService.showPoint(latlon);
-			}, this);
-		}
-	};
-}])
-
-.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
-	var defaultOptions = {
-			actions : [],
-			visible : true,
-			modal : false,
-			minWidth : 240,
-			title : "Features within approx 2km",
-			position : {top:140, left:40}
-		};
-	
-	return {
-		restrict:"AE",
-		templateUrl : "map/point/point.html",
-		scope :true,
-		controller : ['$scope', function($scope) {
-			if($scope.options) {
-				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
-			} else {
-				$scope.windowOptions = angular.extend({}, defaultOptions);
-			}
-		}],
-		link : function(scope, element) {
-			console.log("Id = ", scope.$id);
-			// This things is a one shot wonder so we listen for an event.
-			$rootScope.$on("map.point.changed", function(event, point) {
-				scope.point = point;
-				pointService.removeLayer();
-				if(typeof point != "undefined" && point) {
-					scope.changePoint(point);
-					pointService.getMetaData().then(function(response) {
-						scope.metadata = response.data;
-					});
-				}
-			});
-			
-			scope.createTitle = function() {
-				var oneItem = !this.greaterThanOneItem(),
-					layerName = this.feature.layerName,
-					metadata = this.metadata[layerName],
-					preferredLabel = metadata.preferredLabel,
-					value = this.feature.attributes[preferredLabel];
-				
-				if(!oneItem && value && value != "Null") {
-					return value;
-				} else {
-					return metadata.label;
-				}				
-			};
-			
-			scope.changePoint = function(newValue) {
-				pointService.moveMarker(newValue);
-				if(newValue) {
-					pointService.getInfo(newValue).then(function(data) {
-						handleResponse(data);
-					});
-				}
-				pointService.removeLayer();
-			};
-			
-			scope.clearPoint = function() {
-				scope.point = false;
-				pointService.removeLayer();
-				pointService.removeMarker();
-			};
-			
-			scope.toggleShow = function() {
-				this.feature.displayed = !this.feature.displayed;
-				if(this.feature.displayed) {
-					this.feature.feature = pointService.showFeature(this.feature);
-				} else {
-					pointService.hideFeature(this.feature.feature);
-					this.feature.layer = null;
-				}
-			};			
-			
-			scope.oneShowing = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				return oneShown;
-			};
-			
-			scope.greaterThanOneItem = function() {
-				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
-			};
-			
-			scope.groupShow = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				
-				group.forEach(function(feature) {
-					if(oneShown) {
-						feature.feature = pointService.hideFeature(feature.feature);
-						feature.displayed = false;
-					} else {
-						feature.feature = pointService.showFeature(feature);
-						feature.displayed = true;
-					}
-				});
-			};			
-			
-			scope.allHidden = function() {
-				var allHidden = true;
-				if(this.featuresInfo && this.featuresInfo.results) {
-					this.featuresInfo.results.forEach(function(feature) {
-						allHidden &= !feature.displayed;
-					});
-				}
-				return allHidden;
-			};
-			
-			scope.toggleAll = function() {
-				var allHidden = scope.allHidden();
-				this.featuresInfo.results.forEach(function(feature) {
-					if(allHidden) {
-						if(!feature.displayed) {
-							feature.displayed = true;
-							feature.feature = pointService.showFeature(feature);
-						}
-					} else {
-						if(feature.displayed) {
-							feature.displayed = false;
-							feature.feature = pointService.hideFeature(feature.feature);
-						}
-					}
-				});
-			};
-			
-			scope.elevationPath = function(label) {
-				if(!this.feature.feature) {
-					this.feature.feature = pointService.createFeature(this.feature);
-				}
-				pointService.triggerElevationPlot(this.feature.feature[0], label);
-			};
-			
-			function handleResponse(data) {
-				scope.featuresInfo = data;
-				pointService.createLayer();				
-			}
-		}
-	};
-}])
-
-.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
-	var featuresUnderPointUrl = "service/path/featureInfo",
-		layer = null,
-		control = null,
-		esriGeometryMapping = {
-			"esriGeometryPoint"   : {
-				createFeatures : function(geometry) {
-					var point = [geometry.y, geometry.x];
-					return [L.circleMarker(point)];
-				},
-				type : "x,y"
-			},
-			"esriGeometryPolyline": {
-				createFeatures : function(geometry) {
-					var features = [];
-					geometry.paths.forEach(function(path) {
-						var points = [];
-						path.forEach(function(point) {
-							points.push([point[1], point[0]]);
-						});						
-						features.push(L.polyline(points));
-					});
-					return features;
-				},
-				type: "paths"
-			},
-			"esriGeometryPolygon" : {
-				createFeatures : function(geometry) {
-					var polygonGeometry,
-						rings = [];
-					
-					geometry.rings.forEach(function(ring) {
-						var linearRing, polygon, points = [];
-						ring.forEach(function(pointArr) {
-							points.push([pointArr[1], pointArr[0]]);
-						});
-					    rings.push(points);
-					});
-					polygonGeometry = L.multiPolygon(rings);
-					return [polygonGeometry];
-				},
-				type: "rings"
-			}
-		},
-		metaDataUrl = "map/point/pointMetadata.json",
-		marker = null,
-		clickControl = null,
-		clickListeners = [];
-	
-	return {
-		triggerElevationPlot : function(geometry, label) {
-			var distance = geometry.getLength();
-			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
-		},
-		
-		addMapListener : function(callback, bound) {
-			var alreadyBound = false;
-			clickListeners.forEach(function(obj) {
-				if(obj.callback == callback && obj.bound == bound) {
-					alreadyBound = true;
-				}
-			});
-			if(!alreadyBound) {
-				clickListeners.push({callback : callback, bound : bound});
-			}
-			
-			if(!clickControl) {
-				clickControl = true;
-				mapService.getMap().then(function(map) {
-		            map.on("click", function(e) {
-		               clickListeners.forEach(function(listener) {
-		            	   var callback = listener.callback,
-		            	   		point = {
-		            			   x: e.latlng.lng,
-		            			   y: e.latlng.lat
-		            	   		};
-		            	   
-		            	   point.lat = point.y;
-		            	   point.lng = point.x;
-		                   if(listener.bound) {
-		                	   callback.bind(listener.bound);
-		                   }
-		                   callback(point);
-		                }); 
-		            });
-				});
-			}
-		},
-		
-		getMetaData : function() {
-			return $http.get(metaDataUrl, {cache:true});
-		},
-		
-		moveMarker : function(point) {
-			mapService.getMap().then(function(map) {
-				var size, offset, icon;
-	
-				if(marker) {
-					map.removeLayer(marker);
-				}
-				marker = L.marker(point).addTo(map);
-			});
-			
-		},
-		
-		removeMarker : function() {
-			if(marker) {
-				mapService.getMap().then(function(map) {
-					map.removeLayer(marker);
-					marker = null;					
-				});
-			}			
-		},
-		
-		showPoint : function(point) {
-			$rootScope.$broadcast("map.point.changed", point);
-		},
-		
-		removePoint : function() {
-			$rootScope.$broadcast("map.point.changed", null);
-		},
-		
-		getBehaviour : function(geometryType) {
-			
-		},
-		
-		getInfo : function(point) {
-			return mapService.getMap().then(function(map) {
-				var bounds = map._container.getBoundingClientRect(),
-					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
-					extent = map.getBounds();
-
-				return configService.getConfig("clientSessionId").then(function(id) {			
-					return $http.post(featuresUnderPointUrl, {
-							clientSessionId : id,
-							x:point.x, 
-							y:point.y, 
-							width:bounds.width / ratio, 
-							height:bounds.height / ratio,
-							extent : {
-								left : extent.left,
-								right : extent.right,
-								top: extent.top,
-								bottom: extent.bottom
-					}}).then(function(response) {
-						return response.data;
-					});
+		require : "^geoMap",
+		restrict : "AE",
+		link : function(scope, element, attrs, ctrl) {
+			ctrl.getMap().then(function(map) {
+				L.Control.measureControl().addTo(map);
+				// TODO. See if it is useful
+				map.on("draw:drawstop", function(data) {
+					$log.info("Draw stopped");
+					$log.info(data);
 				});
 			});
-		},
-		
-		overFeatures : function(features) {
-			var item;
-			if(!features) {
-				return;
-			}
-			if(angular.isArray(features)) {
-				item = features[0];
-			} else {
-				item = features;
-			}
-			if(item) {
-				item.bringToFront().setStyle({color:"red"});
-			}
-		},
-		
-		outFeatures : function(features) {
-			if(!features) {
-				return;
-			}
-			features.forEach(function(feature) {
-				feature.setStyle({color : '#03f'});
-			}); 			
-		},
-		
-		createLayer : function() {
-			return mapService.getMap().then(function(map) {
-				layer = L.layerGroup();
-				map.addLayer(layer);
-				return layer;
-			});	
-		},
-		
-		removeLayer : function() {		
-			return mapService.getMap().then(function(map) {
-				if(layer) {
-					map.removeLayer(layer);
-				}
-                /* jshint -W093 */
-				return layer = null;
-			});	
-		},
-		
-		createFeature : function(data) {
-			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
-		},
-		
-		showFeature : function(data) {
-			var features = this.createFeature(data);
-			features.forEach(function(feature) {
-				layer.addLayer(feature);				
-			});
-			return features;
-		},
-		
-		hideFeature : function(features) {
-			if(features) {
-				features.forEach(function(feature) {
-					layer.removeLayer(feature);					
-				});
-			}
 		}
 	};
-}])
+}]);
 
-.filter("dashNull", [function() {
-	return function(value) {
-		if(!value || "Null" == value) {
-			return "-";
-		}
-		return value;
-	};
-}])
-
-.filter("featureGroups", [function() {
-	return function(items) {
-		var groups = [],
-			set = {};
-		if(!items) {
-			return groups;
-		}
-		items.forEach(function(item) {
-			var layerName = item.layerName;
-			if(!set[layerName]) {
-				set[layerName] = true;
-				groups.push(layerName);
-			}
-		});
-		return groups;
-	};
-}])
-
-.filter("filterGroupsByLayername", [function() {
-	return function(items, layerName) {
-		var group = [];
-		if(!items) {
-			return group;
-		}
-		items.forEach(function(item) {
-			if(layerName == item.layerName) {
-				group.push(item);
-			}
-		});
-		return group;
-	};
-}])
-
-
-.controller("OverFeatureCtrl", OverFeatureCtrl);
-
-OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
-function OverFeatureCtrl($filter, pointService) {
-	this.click = function() {
-		console.log("Click");
-	};
-
-	this.mouseenter = function(feature) {
-		console.log("enter");
-		pointService.overFeatures(feature.feature);
-	};
-	
-	this.mouseleave = function(feature) {
-		console.log("leave");
-		pointService.outFeatures(feature.feature);
-	};
-	
-	this.groupEnter = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.overFeatures(feature.feature);
-		});
-	};
-	
-	this.groupLeave = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.outFeatures(feature.feature);
-		});
-	};
-}
-
-})(angular, L, window);
-
+})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3669,6 +2870,816 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(angular, L, window) {
+'use strict';
+
+angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
+
+.directive("expPoint", ['pointService', function(pointService) {
+	return {
+		scope : {
+			data : "=point"
+		},		
+		controller : ['$scope', function($scope) {
+			$scope.$watch("data", function(newData, oldData) {
+				if(newData || oldData) {
+					pointService.showPoint($scope.data);
+				}
+			});
+		}]
+	};
+}])
+
+.directive("expClickMapPoint", ['pointService', function(pointService) {
+	return {
+		restrict:'AE',
+		scope : {
+		},		
+		link : function(scope, element) {
+			pointService.addMapListener(function(latlon) {
+				pointService.showPoint(latlon);
+			}, this);
+		}
+	};
+}])
+
+.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
+	var defaultOptions = {
+			actions : [],
+			visible : true,
+			modal : false,
+			minWidth : 240,
+			title : "Features within approx 2km",
+			position : {top:140, left:40}
+		};
+	
+	return {
+		restrict:"AE",
+		templateUrl : "map/point/point.html",
+		scope :true,
+		controller : ['$scope', function($scope) {
+			if($scope.options) {
+				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
+			} else {
+				$scope.windowOptions = angular.extend({}, defaultOptions);
+			}
+		}],
+		link : function(scope, element) {
+			console.log("Id = ", scope.$id);
+			// This things is a one shot wonder so we listen for an event.
+			$rootScope.$on("map.point.changed", function(event, point) {
+				scope.point = point;
+				pointService.removeLayer();
+				if(typeof point != "undefined" && point) {
+					scope.changePoint(point);
+					pointService.getMetaData().then(function(response) {
+						scope.metadata = response.data;
+					});
+				}
+			});
+			
+			scope.createTitle = function() {
+				var oneItem = !this.greaterThanOneItem(),
+					layerName = this.feature.layerName,
+					metadata = this.metadata[layerName],
+					preferredLabel = metadata.preferredLabel,
+					value = this.feature.attributes[preferredLabel];
+				
+				if(!oneItem && value && value != "Null") {
+					return value;
+				} else {
+					return metadata.label;
+				}				
+			};
+			
+			scope.changePoint = function(newValue) {
+				pointService.moveMarker(newValue);
+				if(newValue) {
+					pointService.getInfo(newValue).then(function(data) {
+						handleResponse(data);
+					});
+				}
+				pointService.removeLayer();
+			};
+			
+			scope.clearPoint = function() {
+				scope.point = false;
+				pointService.removeLayer();
+				pointService.removeMarker();
+			};
+			
+			scope.toggleShow = function() {
+				this.feature.displayed = !this.feature.displayed;
+				if(this.feature.displayed) {
+					this.feature.feature = pointService.showFeature(this.feature);
+				} else {
+					pointService.hideFeature(this.feature.feature);
+					this.feature.layer = null;
+				}
+			};			
+			
+			scope.oneShowing = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				return oneShown;
+			};
+			
+			scope.greaterThanOneItem = function() {
+				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
+			};
+			
+			scope.groupShow = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				
+				group.forEach(function(feature) {
+					if(oneShown) {
+						feature.feature = pointService.hideFeature(feature.feature);
+						feature.displayed = false;
+					} else {
+						feature.feature = pointService.showFeature(feature);
+						feature.displayed = true;
+					}
+				});
+			};			
+			
+			scope.allHidden = function() {
+				var allHidden = true;
+				if(this.featuresInfo && this.featuresInfo.results) {
+					this.featuresInfo.results.forEach(function(feature) {
+						allHidden &= !feature.displayed;
+					});
+				}
+				return allHidden;
+			};
+			
+			scope.toggleAll = function() {
+				var allHidden = scope.allHidden();
+				this.featuresInfo.results.forEach(function(feature) {
+					if(allHidden) {
+						if(!feature.displayed) {
+							feature.displayed = true;
+							feature.feature = pointService.showFeature(feature);
+						}
+					} else {
+						if(feature.displayed) {
+							feature.displayed = false;
+							feature.feature = pointService.hideFeature(feature.feature);
+						}
+					}
+				});
+			};
+			
+			scope.elevationPath = function(label) {
+				if(!this.feature.feature) {
+					this.feature.feature = pointService.createFeature(this.feature);
+				}
+				pointService.triggerElevationPlot(this.feature.feature[0], label);
+			};
+			
+			function handleResponse(data) {
+				scope.featuresInfo = data;
+				pointService.createLayer();				
+			}
+		}
+	};
+}])
+
+.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
+	var featuresUnderPointUrl = "service/path/featureInfo",
+		layer = null,
+		control = null,
+		esriGeometryMapping = {
+			"esriGeometryPoint"   : {
+				createFeatures : function(geometry) {
+					var point = [geometry.y, geometry.x];
+					return [L.circleMarker(point)];
+				},
+				type : "x,y"
+			},
+			"esriGeometryPolyline": {
+				createFeatures : function(geometry) {
+					var features = [];
+					geometry.paths.forEach(function(path) {
+						var points = [];
+						path.forEach(function(point) {
+							points.push([point[1], point[0]]);
+						});						
+						features.push(L.polyline(points));
+					});
+					return features;
+				},
+				type: "paths"
+			},
+			"esriGeometryPolygon" : {
+				createFeatures : function(geometry) {
+					var polygonGeometry,
+						rings = [];
+					
+					geometry.rings.forEach(function(ring) {
+						var linearRing, polygon, points = [];
+						ring.forEach(function(pointArr) {
+							points.push([pointArr[1], pointArr[0]]);
+						});
+					    rings.push(points);
+					});
+					polygonGeometry = L.multiPolygon(rings);
+					return [polygonGeometry];
+				},
+				type: "rings"
+			}
+		},
+		metaDataUrl = "map/point/pointMetadata.json",
+		marker = null,
+		clickControl = null,
+		clickListeners = [];
+	
+	return {
+		triggerElevationPlot : function(geometry, label) {
+			var distance = geometry.getLength();
+			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
+		},
+		
+		addMapListener : function(callback, bound) {
+			var alreadyBound = false;
+			clickListeners.forEach(function(obj) {
+				if(obj.callback == callback && obj.bound == bound) {
+					alreadyBound = true;
+				}
+			});
+			if(!alreadyBound) {
+				clickListeners.push({callback : callback, bound : bound});
+			}
+			
+			if(!clickControl) {
+				clickControl = true;
+				mapService.getMap().then(function(map) {
+		            map.on("click", function(e) {
+		               clickListeners.forEach(function(listener) {
+		            	   var callback = listener.callback,
+		            	   		point = {
+		            			   x: e.latlng.lng,
+		            			   y: e.latlng.lat
+		            	   		};
+		            	   
+		            	   point.lat = point.y;
+		            	   point.lng = point.x;
+		                   if(listener.bound) {
+		                	   callback.bind(listener.bound);
+		                   }
+		                   callback(point);
+		                }); 
+		            });
+				});
+			}
+		},
+		
+		getMetaData : function() {
+			return $http.get(metaDataUrl, {cache:true});
+		},
+		
+		moveMarker : function(point) {
+			mapService.getMap().then(function(map) {
+				var size, offset, icon;
+	
+				if(marker) {
+					map.removeLayer(marker);
+				}
+				marker = L.marker(point).addTo(map);
+			});
+			
+		},
+		
+		removeMarker : function() {
+			if(marker) {
+				mapService.getMap().then(function(map) {
+					map.removeLayer(marker);
+					marker = null;					
+				});
+			}			
+		},
+		
+		showPoint : function(point) {
+			$rootScope.$broadcast("map.point.changed", point);
+		},
+		
+		removePoint : function() {
+			$rootScope.$broadcast("map.point.changed", null);
+		},
+		
+		getBehaviour : function(geometryType) {
+			
+		},
+		
+		getInfo : function(point) {
+			return mapService.getMap().then(function(map) {
+				var bounds = map._container.getBoundingClientRect(),
+					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
+					extent = map.getBounds();
+
+				return configService.getConfig("clientSessionId").then(function(id) {			
+					return $http.post(featuresUnderPointUrl, {
+							clientSessionId : id,
+							x:point.x, 
+							y:point.y, 
+							width:bounds.width / ratio, 
+							height:bounds.height / ratio,
+							extent : {
+								left : extent.left,
+								right : extent.right,
+								top: extent.top,
+								bottom: extent.bottom
+					}}).then(function(response) {
+						return response.data;
+					});
+				});
+			});
+		},
+		
+		overFeatures : function(features) {
+			var item;
+			if(!features) {
+				return;
+			}
+			if(angular.isArray(features)) {
+				item = features[0];
+			} else {
+				item = features;
+			}
+			if(item) {
+				item.bringToFront().setStyle({color:"red"});
+			}
+		},
+		
+		outFeatures : function(features) {
+			if(!features) {
+				return;
+			}
+			features.forEach(function(feature) {
+				feature.setStyle({color : '#03f'});
+			}); 			
+		},
+		
+		createLayer : function() {
+			return mapService.getMap().then(function(map) {
+				layer = L.layerGroup();
+				map.addLayer(layer);
+				return layer;
+			});	
+		},
+		
+		removeLayer : function() {		
+			return mapService.getMap().then(function(map) {
+				if(layer) {
+					map.removeLayer(layer);
+				}
+                /* jshint -W093 */
+				return layer = null;
+			});	
+		},
+		
+		createFeature : function(data) {
+			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
+		},
+		
+		showFeature : function(data) {
+			var features = this.createFeature(data);
+			features.forEach(function(feature) {
+				layer.addLayer(feature);				
+			});
+			return features;
+		},
+		
+		hideFeature : function(features) {
+			if(features) {
+				features.forEach(function(feature) {
+					layer.removeLayer(feature);					
+				});
+			}
+		}
+	};
+}])
+
+.filter("dashNull", [function() {
+	return function(value) {
+		if(!value || "Null" == value) {
+			return "-";
+		}
+		return value;
+	};
+}])
+
+.filter("featureGroups", [function() {
+	return function(items) {
+		var groups = [],
+			set = {};
+		if(!items) {
+			return groups;
+		}
+		items.forEach(function(item) {
+			var layerName = item.layerName;
+			if(!set[layerName]) {
+				set[layerName] = true;
+				groups.push(layerName);
+			}
+		});
+		return groups;
+	};
+}])
+
+.filter("filterGroupsByLayername", [function() {
+	return function(items, layerName) {
+		var group = [];
+		if(!items) {
+			return group;
+		}
+		items.forEach(function(item) {
+			if(layerName == item.layerName) {
+				group.push(item);
+			}
+		});
+		return group;
+	};
+}])
+
+
+.controller("OverFeatureCtrl", OverFeatureCtrl);
+
+OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
+function OverFeatureCtrl($filter, pointService) {
+	this.click = function() {
+		console.log("Click");
+	};
+
+	this.mouseenter = function(feature) {
+		console.log("enter");
+		pointService.overFeatures(feature.feature);
+	};
+	
+	this.mouseleave = function(feature) {
+		console.log("leave");
+		pointService.outFeatures(feature.feature);
+	};
+	
+	this.groupEnter = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.overFeatures(feature.feature);
+		});
+	};
+	
+	this.groupLeave = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.outFeatures(feature.feature);
+		});
+	};
+}
+
+})(angular, L, window);
+
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+/**
+ * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
+ */
+(function(angular, Exp, L) {
+'use strict';
+
+angular.module("geo.elevation", [
+                                  'graph',
+                                  'explorer.crosshair',
+                                  'explorer.flasher',
+                                  'explorer.feature.summary',
+                                  'geo.map',
+                                  'geo.path'])
+
+.directive("pathElevationPlot", ['$log', '$timeout', '$rootScope','$filter', 'elevationService', 'crosshairService',   'featureSummaryService',
+             function($log, $timeout, $rootScope, $filter, elevationService, crosshairService, featureSummaryService) {
+	var WIDTH = 1000,
+		HEIGHT = 90,
+		elevationStyle = {
+			fill:"orange",
+			fillOpacity : 0.4,
+			stroke : "darkred",
+			strokeWidth : 1.5
+		},
+		waterTableStyle = {
+			fill:"lightblue",
+			fillOpacity:0.8,
+			stroke:"darkblue",
+			strokeWidth : 1.5
+		},
+		infoLoading = '<span><img alt="Waiting..." src="resources/img/tinyloader.gif" ng-show="message.spinner" style="position:relative;top:2px;" width="12"></img></span>';	
+	
+	return {
+		templateUrl : "map/elevation/elevation.html",
+		scope:true,
+		controller : ['$scope', function($scope) {
+			$scope.paths = [];
+			$scope.config = {
+					yLabel : "Elevation (m)",
+					xLabel : "Distance: 3000m"
+			};
+			
+			$rootScope.$on("elevation.plot.data", function(event, data) {
+				$scope.length = data.length;
+				$scope.geometry = data.geometry;
+				$scope.config.xLabel = "Distance: " + data.length.toFixed(1) + "m";
+				$scope.waterTable = null;
+			
+				if($scope.length && $scope.geometry) {
+					elevationService.getElevation($scope.geometry, $scope.length).then(function(elevation) {
+						// Keep a handle on it as we will generally build a collection after the first build
+						$scope.elevation = {
+								style: elevationStyle,
+								data: elevation
+						};
+						// Show the range.
+						$scope.config.leftText = "Elevation Range: " + 
+							$filter("length")(d3.min(elevation, function(d) { return d.z; }), true) + " - " + 
+							$filter("length")(d3.max(elevation, function(d) { return d.z; }), true);
+					
+						// If we got here we always want to wipe out existing paths.						
+						$scope.paths = [$scope.elevation];
+					});
+
+					elevationService.intersectsWaterTable($scope.geometry).then(function(intersects) {
+						$scope.intersectsWaterTable = intersects;
+					});
+				}
+			});	
+		
+			$scope.getInfoText = function() {
+				if(!$scope.infoText) {
+					$scope.infoText = infoLoading;
+					elevationService.getInfoText().then(function(html) {
+						$scope.infoText = html;
+					});
+				}
+			};
+			
+			$scope.toggleWaterTable = function() {
+				var length = $scope.paths.length;
+				// We have to clear the paths so that it re-renders from scratch.
+				$scope.paths = [];
+				// Then we re-render on the next animation frame.
+				if($scope.waterTable) {
+					$timeout(function() {
+						if(length == 1) {
+							$scope.paths = [$scope.elevation, $scope.waterTable];
+						} else {
+							$scope.paths = [$scope.elevation];
+						}
+					});
+				} else {
+					elevationService.getWaterTable($scope.geometry, $scope.length).then(function(waterTable) {
+						$scope.waterTable = {
+								style : waterTableStyle,
+								data : waterTable
+						};
+						$scope.paths = [$scope.elevation, $scope.waterTable];							
+					});
+				}
+			};
+
+			$scope.close = function() {
+				$scope.paths = $scope.geometry = $scope.length = null;
+			};
+		}],
+
+		link : function(scope, element) {				
+			scope.graphClick = function(event) {
+				if(event.position) {
+					var point = event.position.points[0].point;
+					elevationService.panToPoint(point);
+					scope.point = point;
+				}				
+			};
+
+			scope.graphLeave = function(event) {
+				scope.position = null;
+				crosshairService.remove();
+				cancelDeferredView();
+				$log.debug("Mouse left");
+				if(scope.mapListener) {
+					$log.info("offMapMove");
+					featureSummaryService.offMapMove(scope.mapListener);
+				}
+			};
+
+			scope.graphEnter = function(event) {
+				$log.debug("Graph be entered");
+			};
+
+			scope.graphMove = function(event) {
+				var point;
+				
+				scope.position = event.position;
+				
+				if(scope.position) {
+					point = scope.position.point;
+					scope.position.markerLonlat = crosshairService.move(point);
+					deferredView();
+				}
+				if(!scope.mapListener) {
+					scope.mapListener = function() {
+						cancelDeferredView();
+						deferredView();
+					};
+					$log.info("onMapMove");
+					featureSummaryService.onMapMove(scope.mapListener);
+				}
+				$log.debug("Mouse moving...");
+			};
+
+			scope.$watch("geometry", processGeometry);
+			
+			function processGeometry() {
+				if(scope.line) {
+					scope.line = elevationService.pathHide(scope.line);
+				}
+				if(scope.geometry) {
+					scope.line = elevationService.pathShow(scope.geometry);
+				} else {
+					elevationService.hideWaterTable();
+				}
+			
+			}
+			
+			function deferredView() {
+				$log.info("Deferred view");
+				featureSummaryService.deferView(scope.position).then(function(data) {
+					scope.featuresUnderPoint = data;
+				});
+			}
+			
+			function cancelDeferredView() {
+				$log.info("Cancel deferred view");
+				featureSummaryService.cancelView();
+				scope.featuresUnderPoint = null;
+			}
+		}
+	};
+}])
+
+.directive('marsInfoElevation', ['$log', 'elevationService', function($log, elevationService){
+	return {
+		templateUrl:"map/elevation/elevationInfo.html",
+		scope:true,
+		link : function(scope, element) {
+			scope.toggleWaterTableShowing = function() {
+				scope.state = elevationService.getState();
+				
+				if(!elevationService.isWaterTableShowing()) {
+					elevationService.showWaterTable();
+				} else {
+					elevationService.hideWaterTable();
+				}
+			};
+		}
+	};
+}]) 
+
+.provider("elevationService", function ConfigServiceProvider() {
+	var pointCount = 500,
+		elevationUrl = "service/path/elevation",
+		waterTableUrl = "service/path/waterTable",
+		artesianBasinKmlUrl = "service/artesianBasin/geometry/kml",
+		intersectUrl = "service/artesianBasin/intersects",
+		waterTableLayer = null,
+		map,
+		state = {
+			isWaterTableShowing : false
+		};
+		
+	this.setIntersectUrl = function(url) {
+		intersectUrl = url;
+	};
+
+	this.setKmlUrl = function(url) {
+		artesianBasinKmlUrl = url;
+	};
+
+	this.setElevationUrl = function(url) {
+		elevationUrl = url;
+	};
+
+	this.setWaterTableUrl = function(url) {
+		waterTableUrl = url;
+	};
+	
+	this.$get = ['$log', '$http', '$q', 'mapService', 'flashService', function($log, $http, $q, mapService, flashService) {
+
+		// We are safe doing this as it can't be triggered until the map is drawn anyway.
+		mapService.getMap().then(function(olMap) {map = olMap;});
+
+		var $elevation = {
+			panToPoint : function(point) {
+				mapService.zoomTo(point.y, point.x);
+			},
+	
+			getState : function() {
+				return state;
+			},
+			
+			getElevation : function(geometry, distance) {
+				var flasher = flashService.add("Retrieving elevation details...", 8000),
+					wktStr = Exp.Util.toLineStringWkt(geometry);
+
+				return $http.post(elevationUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
+					flashService.remove(flasher);
+					return response.data;
+				});	
+			},
+	
+			intersectsWaterTable :function(geometry) {
+				var url = intersectUrl + (intersectUrl.indexOf("?") > -1?"":"?wkt=");
+				return $http.get(url + Exp.Util.toLineStringWkt(geometry), {cache:true}).then(function(response) {
+					return response.data.intersects;
+				});
+			},
+		
+			isWaterTableShowing : function() {
+                /* jshint -W093 */
+				return state.isWaterTableShowing = waterTableLayer !== null;
+			},
+			
+			showWaterTable : function() {
+				if(!waterTableLayer) {
+					this.getWaterTableLayer().then(function(layer) {
+						layer.addTo(map);
+					});
+				}
+				state.isWaterTableShowing = true;
+			},
+	
+			hideWaterTable : function() {
+				if(waterTableLayer) {
+					map.removeLayer(waterTableLayer);
+				}
+				waterTableLayer = null;
+				state.isWaterTableShowing = false;
+			},
+		
+			createWaterTableLayer : function() {
+				return mapService.getMap().then(function(map) {
+					var kml = new L.KML(artesianBasinKmlUrl, {async: true});
+				
+					return kml.on("loaded", function(e) {
+						waterTableLayer = e.target;
+						return waterTableLayer;
+					});				
+				});			
+			},
+		
+			getWaterTableLayer : function() {
+				return this.createWaterTableLayer();
+			},
+	
+			getWaterTable : function(geometry, distance) {
+				var flasher = flashService.add("Retrieving water table details...", 8000),
+					wktStr = Exp.Util.toLineStringWkt(geometry);
+
+				return $http.post(waterTableUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
+					flashService.remove(flasher);
+					return response.data;
+				});
+			},
+	
+			getInfoText : function() {
+				return $http("map/elevation/elevationInfo.html", {cache : true}).then(function(response) {
+					return response.data;
+				});
+			},
+	
+			pathShow : function(latlngs) {
+				var lineLayer = L.polyline(latlngs, {color: 'black', weight:2}).addTo(map);
+				return lineLayer;
+			},
+	
+			pathHide : function(lineLayer) {
+				map.removeLayer(lineLayer);
+				return null;
+			}		
+		};
+		
+		return $elevation;
+	}];
+});
+
+})(angular, Exp, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 
 (function(L) {
 
@@ -3924,6 +3935,54 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
+L.Control.MousePosition = L.Control.extend({
+  options: {
+    position: 'bottomleft',
+    separator: ' : ',
+    emptyString: 'Unavailable',
+    lngFirst: false,
+    numDigits: 5,
+    lngFormatter: undefined,
+    latFormatter: undefined,
+    prefix: ""
+  },
+
+  onAdd: function (map) {
+    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+    L.DomEvent.disableClickPropagation(this._container);
+    map.on('mousemove', this._onMouseMove, this);
+    this._container.innerHTML=this.options.emptyString;
+    return this._container;
+  },
+
+  onRemove: function (map) {
+    map.off('mousemove', this._onMouseMove);
+  },
+
+  _onMouseMove: function (e) {
+    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
+    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
+    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    var prefixAndValue = this.options.prefix + ' ' + value;
+    this._container.innerHTML = prefixAndValue;
+  }
+
+});
+
+L.Map.mergeOptions({
+    positionControl: false
+});
+
+L.Map.addInitHook(function () {
+    if (this.options.positionControl) {
+        this.positionControl = new L.Control.MousePosition();
+        this.addControl(this.positionControl);
+    }
+});
+
+L.control.mousePosition = function (options) {
+    return new L.Control.MousePosition(options);
+};
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3989,54 +4048,6 @@ L.control.legend = function (options) {
 	
 })(L);
 
-L.Control.MousePosition = L.Control.extend({
-  options: {
-    position: 'bottomleft',
-    separator: ' : ',
-    emptyString: 'Unavailable',
-    lngFirst: false,
-    numDigits: 5,
-    lngFormatter: undefined,
-    latFormatter: undefined,
-    prefix: ""
-  },
-
-  onAdd: function (map) {
-    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
-    L.DomEvent.disableClickPropagation(this._container);
-    map.on('mousemove', this._onMouseMove, this);
-    this._container.innerHTML=this.options.emptyString;
-    return this._container;
-  },
-
-  onRemove: function (map) {
-    map.off('mousemove', this._onMouseMove);
-  },
-
-  _onMouseMove: function (e) {
-    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
-    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
-    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    var prefixAndValue = this.options.prefix + ' ' + value;
-    this._container.innerHTML = prefixAndValue;
-  }
-
-});
-
-L.Map.mergeOptions({
-    positionControl: false
-});
-
-L.Map.addInitHook(function () {
-    if (this.options.positionControl) {
-        this.positionControl = new L.Control.MousePosition();
-        this.addControl(this.positionControl);
-    }
-});
-
-L.control.mousePosition = function (options) {
-    return new L.Control.MousePosition(options);
-};
 L.Control.ZoomBox = L.Control.extend({
     _active: false,
     _map: null,
@@ -4373,7 +4384,7 @@ angular.module("geo.map", [])
 })(angular, window);
 angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\n	<span id=\"baselayerCtrl\">\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\n	</span>\n</span>");
 $templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\n		<div class=\"pathContent\">\n			<div ng-repeat=\"(key, feature) in features.data\">\n				{{mappings[key].title}}  ({{feature}})\n			</div>\n			<div ng-hide=\"features.count\">No nearby features</div>\n		</div>\n	</div>\n</div>\n");
-$templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\n	<div class=\"row\">\n		<div class=\"col-md-4\">\n			<span class=\"graph-brand\">Path Elevation</span>\n		</div>	\n		<div class=\"col-md-8\">\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\n				</div>	\n				<div class=\"btn-group\">	\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \n							ng-click=\"showInfo = !showInfo\">\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\n					</button>\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\n					</button>				\n				</div>\n			</div>\n		</div>	\n	</div>\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\n</div>");
-$templateCache.put("map/elevation/elevationInfo.html","<div>\nThe elevation graph is calculated from the 3\" DEM data. \nThe data is held in a grid with a cell size of approx. 90 m. \nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\n<br/>\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \nwater table appear above the elevation of the surface on occasions. \nData availability will be indicated by the button labelled \"Show Water Table\". \n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\n</div>\n");
 $templateCache.put("map/layerinspector/layerInspector.html","<div class=\"interactionPanel\">\n	<div class=\"exp-block\" ng-show=\"active\" style=\"height:100%\">\n		<div class=\"exp-header\">\n			<div class=\"interactionPanelHeader\" ng-hide=\"hidename\">\n				<a href=\"javascript:;\" ng-click=\"click()\" ng-show=\"showClose\" title=\"Name is {{name || active.name}}\">{{name || active.name}}</a>\n				<span ng-hide=\"showClose\">{{name || active.name}}</span>\n			</div>\n			<div style=\"float:right\">\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\" \n						ng-click=\"toggleShow(active)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!active.displayed), \'fa-eye\':active.displayed}\"></i></a>\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Collapse extra information\" ng-show=\"showClose\"\n						ng-click=\"click()\"><i class=\"fa fa-caret-square-o-up\"></i></a>\n			</div>\n		</div>\n		<div>\n			<div class=\"thumbNailContainer\" ng-show=\"active.thumbUrl\">\n				<img width=\"100\" ng-src=\"{{active.thumbUrl}}\" class=\"img-thumbnail\" alt=\"{{active.description}}\"></img>\n			</div>\n			<strong>Opacity</strong><br/>\n			<span explorer-layer-slider layer=\"active.layer\" title=\"Change the opacity of the selected layer when shown on the map\" class=\"opacitySlider\"></span>\n			<p/>\n			{{active.description}}\n		</div> \n	</div>\n</div>");
-$templateCache.put("map/point/point.html","<exp-modal class=\"pointInspector ng-cloak\" icon-class=\"fa-map-marker\" is-open=\"point\" on-close=\"clearPoint()\" title=\"Features within approx. 2km\">	\n	<div class=\"pointContent\" ng-controller=\"OverFeatureCtrl as over\">\n		<div style=\"padding-bottom:7px;\">Elev. {{point.z | length : true}}, Lat. {{point.y | number : 3}}&deg;, Long. {{point.x | number:3}}&deg;</div>\n		<div ng-show=\"featuresInfo.results.length > 0\">\n			<div>\n				<div style=\"float:left; padding-bottom:10px\">{{allHidden() && \"Show\" || \"Hide\"}} all features</div>\n				<div style=\"float: right\">				\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show all features on map\"\n						ng-click=\"toggleAll()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':allHidden(), \'fa-eye\':!allHidden()}\"></i></a>\n				</div>\n			</div>\n			<div style=\"clear:both;\"></div>\n		</div>\n		<div ng-hide=\"featuresInfo.results.length > 0\">No nearby features.</div>\n	\n		<div ng-repeat=\"item in featuresInfo.results | featureGroups\" ng-class=\"{\'underlined\':!$last}\">\n			<div ng-show=\"greaterThanOneItem()\"  ng-mouseover=\"over.groupEnter(featuresInfo.results, item)\" ng-mouseout=\"over.groupLeave(featuresInfo.results, item)\">\n				<div style=\"float:left\">\n					<button type=\"button\" class=\"undecorated\" ng-click=\"expanded = !expanded\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':expanded,\'fa-caret-right\':(!expanded)}\"></i></button></button><strong>{{metadata[item].heading}}</strong>\n				</div>\n				<div style=\"float: right\">	\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"   \n						ng-click=\"groupShow(item)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!oneShowing()), \'fa-eye\':oneShowing()}\"></i></a>\n				</div>\n				<div style=\"clear:both;\"></div>\n			</div>\n			<div ng-repeat=\"feature in featuresInfo.results | filterGroupsByLayername : item\" ng-show=\"expanded || !greaterThanOneItem()\">\n				<div ng-mouseover=\"over.mouseenter(feature)\" ng-mouseout=\"over.mouseleave(feature)\" ng-click=\"over.click()\">\n					<div style=\"float: left;\" ng-class=\"{\'pad-left-big\':greaterThanOneItem()}\">\n						<button type=\"button\" ng-click=\"feature.expanded = !feature.expanded\" class=\"undecorated\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':feature.expanded,\'fa-caret-right\':(!feature.expanded)}\"></i></button>\n						<a href=\"javascript:;\" class=\"featureLink\" title=\"{{metadata[feature.layerName].description}}\"\n							ng-click=\"makeFeatureActive()\" ng-class=\"{active:(feature.active)}\">{{createTitle()}}</a>\n					</div>\n					<div style=\"float: right\">	\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Graph elevation changes for feature\'s path.\"\n							ng-click=\"elevationPath(metadata[feature.layerName].label + \' elevation plot\')\"><i class=\"fa fa-align-left fa-rotate-270\" ng-show=\"feature.geometryType == \'esriGeometryPolyline\'\"></i></a>					\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"\n							ng-click=\"toggleShow(feature)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!feature.displayed), \'fa-eye\':feature.displayed}\"></i> </a>\n					</div>\n				</div>\n				<div style=\"clear:both;\" ng-init=\"featureMeta = metadata[feature.layerName]\">\n					<div ng-repeat=\"attribute in featureMeta.attributes\" ng-show=\"feature.expanded\">\n						<div style=\"width:7em;float:left;font-weight:bold;padding-left:9px\">{{attribute.label}}</div>\n						<div style=\"min-width:12em;width:12em;margin-left:7.5em;\" class=\"ellipsis\" title=\"{{feature.attributes[attribute.key]}}\">{{feature.attributes[attribute.key] | dashNull}}</div>\n					</div>\n					<div style=\"border-bottom:1px solid lightgray\" ng-show=\"feature.expanded && !last\"></div>\n				</div>\n			</div>	\n		</div>\n	</div>\n</exp-modal>");}]);
+$templateCache.put("map/point/point.html","<exp-modal class=\"pointInspector ng-cloak\" icon-class=\"fa-map-marker\" is-open=\"point\" on-close=\"clearPoint()\" title=\"Features within approx. 2km\">	\n	<div class=\"pointContent\" ng-controller=\"OverFeatureCtrl as over\">\n		<div style=\"padding-bottom:7px;\">Elev. {{point.z | length : true}}, Lat. {{point.y | number : 3}}&deg;, Long. {{point.x | number:3}}&deg;</div>\n		<div ng-show=\"featuresInfo.results.length > 0\">\n			<div>\n				<div style=\"float:left; padding-bottom:10px\">{{allHidden() && \"Show\" || \"Hide\"}} all features</div>\n				<div style=\"float: right\">				\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show all features on map\"\n						ng-click=\"toggleAll()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':allHidden(), \'fa-eye\':!allHidden()}\"></i></a>\n				</div>\n			</div>\n			<div style=\"clear:both;\"></div>\n		</div>\n		<div ng-hide=\"featuresInfo.results.length > 0\">No nearby features.</div>\n	\n		<div ng-repeat=\"item in featuresInfo.results | featureGroups\" ng-class=\"{\'underlined\':!$last}\">\n			<div ng-show=\"greaterThanOneItem()\"  ng-mouseover=\"over.groupEnter(featuresInfo.results, item)\" ng-mouseout=\"over.groupLeave(featuresInfo.results, item)\">\n				<div style=\"float:left\">\n					<button type=\"button\" class=\"undecorated\" ng-click=\"expanded = !expanded\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':expanded,\'fa-caret-right\':(!expanded)}\"></i></button></button><strong>{{metadata[item].heading}}</strong>\n				</div>\n				<div style=\"float: right\">	\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"   \n						ng-click=\"groupShow(item)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!oneShowing()), \'fa-eye\':oneShowing()}\"></i></a>\n				</div>\n				<div style=\"clear:both;\"></div>\n			</div>\n			<div ng-repeat=\"feature in featuresInfo.results | filterGroupsByLayername : item\" ng-show=\"expanded || !greaterThanOneItem()\">\n				<div ng-mouseover=\"over.mouseenter(feature)\" ng-mouseout=\"over.mouseleave(feature)\" ng-click=\"over.click()\">\n					<div style=\"float: left;\" ng-class=\"{\'pad-left-big\':greaterThanOneItem()}\">\n						<button type=\"button\" ng-click=\"feature.expanded = !feature.expanded\" class=\"undecorated\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':feature.expanded,\'fa-caret-right\':(!feature.expanded)}\"></i></button>\n						<a href=\"javascript:;\" class=\"featureLink\" title=\"{{metadata[feature.layerName].description}}\"\n							ng-click=\"makeFeatureActive()\" ng-class=\"{active:(feature.active)}\">{{createTitle()}}</a>\n					</div>\n					<div style=\"float: right\">	\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Graph elevation changes for feature\'s path.\"\n							ng-click=\"elevationPath(metadata[feature.layerName].label + \' elevation plot\')\"><i class=\"fa fa-align-left fa-rotate-270\" ng-show=\"feature.geometryType == \'esriGeometryPolyline\'\"></i></a>					\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"\n							ng-click=\"toggleShow(feature)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!feature.displayed), \'fa-eye\':feature.displayed}\"></i> </a>\n					</div>\n				</div>\n				<div style=\"clear:both;\" ng-init=\"featureMeta = metadata[feature.layerName]\">\n					<div ng-repeat=\"attribute in featureMeta.attributes\" ng-show=\"feature.expanded\">\n						<div style=\"width:7em;float:left;font-weight:bold;padding-left:9px\">{{attribute.label}}</div>\n						<div style=\"min-width:12em;width:12em;margin-left:7.5em;\" class=\"ellipsis\" title=\"{{feature.attributes[attribute.key]}}\">{{feature.attributes[attribute.key] | dashNull}}</div>\n					</div>\n					<div style=\"border-bottom:1px solid lightgray\" ng-show=\"feature.expanded && !last\"></div>\n				</div>\n			</div>	\n		</div>\n	</div>\n</exp-modal>");
+$templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\n	<div class=\"row\">\n		<div class=\"col-md-4\">\n			<span class=\"graph-brand\">Path Elevation</span>\n		</div>	\n		<div class=\"col-md-8\">\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\n				</div>	\n				<div class=\"btn-group\">	\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \n							ng-click=\"showInfo = !showInfo\">\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\n					</button>\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\n					</button>				\n				</div>\n			</div>\n		</div>	\n	</div>\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\n</div>");
+$templateCache.put("map/elevation/elevationInfo.html","<div>\nThe elevation graph is calculated from the 3\" DEM data. \nThe data is held in a grid with a cell size of approx. 90 m. \nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\n<br/>\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \nwater table appear above the elevation of the surface on occasions. \nData availability will be indicated by the button labelled \"Show Water Table\". \n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\n</div>\n");}]);

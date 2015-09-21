@@ -84,14 +84,25 @@ angular.module("geo.draw", ['geo.map'])
 			});
 		},
 		
-		drawRectangle : function() {
+		cancelDrawRectangle : function() {
 			if(rectangleDeferred) {
 				rectangleDeferred.reject();
-				rectangleDeferred = $q.defer();
+				rectangleDeferred = null;
+				if(drawer) {
+					drawer.disable();
+				}
+			}
+		},
+		
+		drawRectangle : function() {
+			this.cancelDrawRectangle();
+			rectangleDeferred = $q.defer();
+			if(drawer) {
+				drawer.enable();
 			} else {
-				rectangleDeferred = $q.defer();
 				mapService.getMap().then(function(map) {
-					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline).enable();
+					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline);
+					drawer.enable();
 				});
 			}			
 			return rectangleDeferred.promise;
