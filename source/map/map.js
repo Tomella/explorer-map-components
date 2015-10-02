@@ -75,6 +75,19 @@ angular.module("geo.map", [])
 			}
 		});
 	};
+
+	service.getGroup = function(groupName) {
+		return groups[groupName];
+	};
+	
+	service.clearGroup = function(groupName) {
+		var layerGroup = groups[groupName],
+			layers = layerGroup.getLayers();
+		
+		layers.forEach(function(layer) {
+			layerGroup.removeLayer(layer);
+		});	
+	};
 	
 	service.removeFromGroup = function(data, groupName) {
 		var group = groups[groupName];
