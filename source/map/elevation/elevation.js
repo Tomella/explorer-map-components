@@ -58,7 +58,7 @@ angular.module("geo.elevation", [
 						};
 						// Show the range.
 						$scope.config.leftText = "Elevation Range: " + 
-							$filter("length")(d3.min(elevation, function(d) { return d.z; }), true) + " - " + 
+							$filter("length")(d3.min(elevation, function(d) { return d.z; }), true) + " to " + 
 							$filter("length")(d3.max(elevation, function(d) { return d.z; }), true);
 					
 						// If we got here we always want to wipe out existing paths.						
