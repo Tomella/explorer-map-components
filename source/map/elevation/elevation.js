@@ -46,7 +46,7 @@ angular.module("geo.elevation", [
 			$rootScope.$on("elevation.plot.data", function(event, data) {
 				$scope.length = data.length;
 				$scope.geometry = data.geometry;
-				$scope.config.xLabel = "Distance: " + $filter("length")(data.length);
+				$scope.config.xLabel = "Distance: " + $filter("length")(data.length, true);
 				$scope.waterTable = null;
 			
 				if($scope.length && $scope.geometry) {
