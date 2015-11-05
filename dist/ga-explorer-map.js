@@ -1222,215 +1222,6 @@ angular.module("geo.draw", ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, context) {
-'use strict';
-
-angular.module("explorer.feature.summary", ["geo.map"])
-
-.directive("expPointFeatures", ['mapService', 'featureSummaryService', function(mapService, featureSummaryService) {
-	return {
-		scope : {
-			features:"="
-		},
-		link:function(scope, element) {
-			scope.$watch("features", function(data, old) {
-				if(scope.features) {
-					featureSummaryService.showPopup(scope.features);
-				} else if(old){
-					featureSummaryService.hidePopup();
-				}
-			});
-			
-		}
-	};
-}])
-
-.directive("featuresUnderPoint", ['$timeout', 'featureSummaryService', 'mapService', function($timeout, featureSummaryService, mapService) {
-	var DELAY = 400;
-	return {
-		restrict :"AE",
-		scope : true,		
-		link : function(scope, element) {
-			mapService.getMap().then(function(map) {
-				var timeout, control = L.control.features();
-				
-				map.addControl(control);
-				map.on("featuresactivate", featuresActivated);
-				map.on("featuresdeactivate", featuresDeactivated);
-				
-				function featuresActivated(event) {
-					map.on("mousemove", moveHandler);
-					map.on("mouseout", moveCancel);
-				}
-				
-				function featuresDeactivated(event) {
-					$timeout.cancel(timeout);
-					featureSummaryService.hidePopup();
-					map.off("mousemove", moveHandler);
-					map.off("mouseout", moveCancel);
-				}
-				
-				function moveCancel() {
-					$timeout.cancel(timeout);					
-				} 
-				
-				function moveHandler(event) {
-					$timeout.cancel(timeout);
-					timeout = $timeout(function() {
-						var position = {
-							markerLonLat : event.latlng,
-							point:{x:event.latlng.lng, y:event.latlng.lat}
-						};
-						featureSummaryService.getAndShowFeatures(position);
-					}, DELAY);
-				}
-			});			
-		}
-	};
-}])
-
-.factory("featureSummaryService", ['$log', 'configService', 'mapService', '$timeout', '$rootScope', '$q', '$http', function($log, configService, mapService, $timeout, $rootScope, $q, $http) {
-	var featuresUnderPointUrl = "service/path/featureCount",
-		featuresUnderPoint,
-		map, marker, 
-		lastDeferredTimeout,
-		control;
-	
-	mapService.getMap().then(function(olMap) {
-		map = olMap; 
-	});
-	
-	return {
-		getAndShowFeatures : function(position) {
-			this.view(position).then(function(features) {
-				this.showPopup(features);
-			}.bind(this));
-		},
-		
-		showPopup : function(features) {
-			var latlng = features.position.point;
-
-			mapService.getMap().then(function(map){
-				var buffer = [];
-				angular.forEach(features.data, function(val, key) {
-					buffer.push(key + " (" + val + ")");
-				});
-					
-				L.popup()
-			   		.setLatLng([latlng.y, latlng.x])
-			   		.setContent(buffer.length?buffer.join('<br />'):"No nearby features")
-			   		.openOn(map);
-			});						 
-		},		
-		
-		hidePopup : function() {
-			// Blow away the popup if we no longer have features.
-			mapService.getMap().then(function(map) {
-				map.closePopup();
-			});
-		},
-		
-		view : function(position) {
-			var deferred = $q.defer();
-			
-			lastDeferredTimeout = null;
-			if(position.point) {
-				this.featuresUnderPoint(position.point).then(function(data) {
-					var count = 0;
-					angular.forEach(data, function(item) {
-						count += item;
-					});
-				
-					deferred.resolve({data:data, position:position, count:count});
-				});
-			}
-			return deferred.promise;
-		},
-		
-		deferView : function(position) {
-			var self = this, 
-				deferred = $q.defer();
-			
-			this.cancelView();
-			lastDeferredTimeout = $timeout(function(){
-				self.view(position).then(function(data) {
-					deferred.resolve(data);
-				});
-			}.bind(this), 200);
-			
-			return deferred.promise;
-		},
-		
-		cancelView : function() {
-			if(lastDeferredTimeout) {
-				$timeout.cancel(lastDeferredTimeout);
-			}
-		},
-		
-		clearView : function() {
-			
-		},
-		
-		onMapMove : function(callback) {
-			$log.debug("Adding event handler");			
-			map.on("moveend", map, callback);
-			return callback;
-		},
-		
-		offMapMove : function(callback) {
-			$log.debug("Removing event handler");
-			map.off("moveend", map, callback);
-		},
-		
-		positionFromLonlat : function(lonlat) {
-			var lat = lonlat.lat?lonlat.lat:lonlat.y,
-				lon = lonlat.lon?lonlat.lon:lonlat.x,
-				wrap = [lat, lon];
-			
-			var position = map.project(wrap);
-			
-
-			console.log([wrap, position]);
-			return position;
-		},
-		
-		getViewPort : function() {
-			return  map._container.getBoundingClientRect();
-		},
-		
-		featuresUnderPoint : function(point) {
-			var deferred = $q.defer(),
-				bounds = map._container.getBoundingClientRect(),
-				ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
-				extent = map.getBounds();
-			
-			configService.getConfig("clientSessionId").then(function(id) {			
-				$http.post(featuresUnderPointUrl, {
-					clientSessionId:id,
-					x:point.x, 
-					y:point.y,
-					width:bounds.width / ratio, 
-					height:bounds.height / ratio,
-					extent : {
-						left : extent.left,
-						right : extent.right,
-						top: extent.top,
-						bottom: extent.bottom
-					}}).then(function(response) {
-						deferred.resolve(response.data);
-				});
-				
-			});
-
-			return deferred.promise;
-		}
-	};
-}]);
-
-})(angular, window);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 /**
  * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
  */
@@ -1476,7 +1267,7 @@ angular.module("geo.elevation", [
 			$rootScope.$on("elevation.plot.data", function(event, data) {
 				$scope.length = data.length;
 				$scope.geometry = data.geometry;
-				$scope.config.xLabel = "Distance: " + data.length.toFixed(1) + "m";
+				$scope.config.xLabel = "Distance: " + $filter("length")(data.length);
 				$scope.waterTable = null;
 			
 				if($scope.length && $scope.geometry) {
@@ -1760,6 +1551,255 @@ angular.module("geo.elevation", [
 });
 
 })(angular, Exp, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular, L){
+'use strict';
+
+angular.module("geo.extent", [])
+
+.directive("geoExtent", ['$log', function($log) {
+	// We are Australia.
+	var DEFAULT_OPTIONS = {
+        center:[-28, 135],
+        zoom:5
+	};
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		scope : {
+			options: "="
+		},
+		link : function(scope, element, attrs, ctrl) {
+			if(typeof scope.options == "undefined") {
+				scope.options = {};
+			}
+			if(typeof scope.options.center == "undefined") {
+				scope.options.center = DEFAULT_OPTIONS.center;
+			} 
+			if(typeof scope.options.zoom == "undefined") {
+				scope.options.zoom = DEFAULT_OPTIONS.zoom;
+			}
+			
+			ctrl.getMap().then(function(map) {
+				L.control.zoommin(scope.options).addTo(map);
+			});
+		}
+	};
+}]);
+
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, context) {
+'use strict';
+
+angular.module("explorer.feature.summary", ["geo.map"])
+
+.directive("expPointFeatures", ['mapService', 'featureSummaryService', function(mapService, featureSummaryService) {
+	return {
+		scope : {
+			features:"="
+		},
+		link:function(scope, element) {
+			scope.$watch("features", function(data, old) {
+				if(scope.features) {
+					featureSummaryService.showPopup(scope.features);
+				} else if(old){
+					featureSummaryService.hidePopup();
+				}
+			});
+			
+		}
+	};
+}])
+
+.directive("featuresUnderPoint", ['$timeout', 'featureSummaryService', 'mapService', function($timeout, featureSummaryService, mapService) {
+	var DELAY = 400;
+	return {
+		restrict :"AE",
+		scope : true,		
+		link : function(scope, element) {
+			mapService.getMap().then(function(map) {
+				var timeout, control = L.control.features();
+				
+				map.addControl(control);
+				map.on("featuresactivate", featuresActivated);
+				map.on("featuresdeactivate", featuresDeactivated);
+				
+				function featuresActivated(event) {
+					map.on("mousemove", moveHandler);
+					map.on("mouseout", moveCancel);
+				}
+				
+				function featuresDeactivated(event) {
+					$timeout.cancel(timeout);
+					featureSummaryService.hidePopup();
+					map.off("mousemove", moveHandler);
+					map.off("mouseout", moveCancel);
+				}
+				
+				function moveCancel() {
+					$timeout.cancel(timeout);					
+				} 
+				
+				function moveHandler(event) {
+					$timeout.cancel(timeout);
+					timeout = $timeout(function() {
+						var position = {
+							markerLonLat : event.latlng,
+							point:{x:event.latlng.lng, y:event.latlng.lat}
+						};
+						featureSummaryService.getAndShowFeatures(position);
+					}, DELAY);
+				}
+			});			
+		}
+	};
+}])
+
+.factory("featureSummaryService", ['$log', 'configService', 'mapService', '$timeout', '$rootScope', '$q', '$http', function($log, configService, mapService, $timeout, $rootScope, $q, $http) {
+	var featuresUnderPointUrl = "service/path/featureCount",
+		featuresUnderPoint,
+		map, marker, 
+		lastDeferredTimeout,
+		control;
+	
+	mapService.getMap().then(function(olMap) {
+		map = olMap; 
+	});
+	
+	return {
+		getAndShowFeatures : function(position) {
+			this.view(position).then(function(features) {
+				this.showPopup(features);
+			}.bind(this));
+		},
+		
+		showPopup : function(features) {
+			var latlng = features.position.point;
+
+			mapService.getMap().then(function(map){
+				var buffer = [];
+				angular.forEach(features.data, function(val, key) {
+					buffer.push(key + " (" + val + ")");
+				});
+					
+				L.popup()
+			   		.setLatLng([latlng.y, latlng.x])
+			   		.setContent(buffer.length?buffer.join('<br />'):"No nearby features")
+			   		.openOn(map);
+			});						 
+		},		
+		
+		hidePopup : function() {
+			// Blow away the popup if we no longer have features.
+			mapService.getMap().then(function(map) {
+				map.closePopup();
+			});
+		},
+		
+		view : function(position) {
+			var deferred = $q.defer();
+			
+			lastDeferredTimeout = null;
+			if(position.point) {
+				this.featuresUnderPoint(position.point).then(function(data) {
+					var count = 0;
+					angular.forEach(data, function(item) {
+						count += item;
+					});
+				
+					deferred.resolve({data:data, position:position, count:count});
+				});
+			}
+			return deferred.promise;
+		},
+		
+		deferView : function(position) {
+			var self = this, 
+				deferred = $q.defer();
+			
+			this.cancelView();
+			lastDeferredTimeout = $timeout(function(){
+				self.view(position).then(function(data) {
+					deferred.resolve(data);
+				});
+			}.bind(this), 200);
+			
+			return deferred.promise;
+		},
+		
+		cancelView : function() {
+			if(lastDeferredTimeout) {
+				$timeout.cancel(lastDeferredTimeout);
+			}
+		},
+		
+		clearView : function() {
+			
+		},
+		
+		onMapMove : function(callback) {
+			$log.debug("Adding event handler");			
+			map.on("moveend", map, callback);
+			return callback;
+		},
+		
+		offMapMove : function(callback) {
+			$log.debug("Removing event handler");
+			map.off("moveend", map, callback);
+		},
+		
+		positionFromLonlat : function(lonlat) {
+			var lat = lonlat.lat?lonlat.lat:lonlat.y,
+				lon = lonlat.lon?lonlat.lon:lonlat.x,
+				wrap = [lat, lon];
+			
+			var position = map.project(wrap);
+			
+
+			console.log([wrap, position]);
+			return position;
+		},
+		
+		getViewPort : function() {
+			return  map._container.getBoundingClientRect();
+		},
+		
+		featuresUnderPoint : function(point) {
+			var deferred = $q.defer(),
+				bounds = map._container.getBoundingClientRect(),
+				ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
+				extent = map.getBounds();
+			
+			configService.getConfig("clientSessionId").then(function(id) {			
+				$http.post(featuresUnderPointUrl, {
+					clientSessionId:id,
+					x:point.x, 
+					y:point.y,
+					width:bounds.width / ratio, 
+					height:bounds.height / ratio,
+					extent : {
+						left : extent.left,
+						right : extent.right,
+						top: extent.top,
+						bottom: extent.bottom
+					}}).then(function(response) {
+						deferred.resolve(response.data);
+				});
+				
+			});
+
+			return deferred.promise;
+		}
+	};
+}]);
+
+})(angular, window);
 (function (angular, google, window) {
 
 'use strict';
@@ -2246,6 +2286,33 @@ angular.module("explorer.mapstate", [])
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
 
+(function(angular){
+'use strict';
+
+angular.module("geo.measure", [])
+
+.directive("geoMeasure", ['$log', function($log) {
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		link : function(scope, element, attrs, ctrl) {
+			ctrl.getMap().then(function(map) {
+				L.Control.measureControl().addTo(map);
+				// TODO. See if it is useful
+				map.on("draw:drawstop", function(data) {
+					$log.info("Draw stopped");
+					$log.info(data);
+				});
+			});
+		}
+	};
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
 (function(angular, L) {
 
 'use strict';
@@ -2343,33 +2410,6 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 
 
 })(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(angular){
-'use strict';
-
-angular.module("geo.measure", [])
-
-.directive("geoMeasure", ['$log', function($log) {
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		link : function(scope, element, attrs, ctrl) {
-			ctrl.getMap().then(function(map) {
-				L.Control.measureControl().addTo(map);
-				// TODO. See if it is useful
-				map.on("draw:drawstop", function(data) {
-					$log.info("Draw stopped");
-					$log.info(data);
-				});
-			});
-		}
-	};
-}]);
-
-})(angular);
 (function () {
 
     "use strict";
@@ -3677,64 +3717,6 @@ function OverFeatureCtrl($filter, pointService) {
 
 })(angular, L, window);
 
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Features = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-location-arrow fa-rotate-180',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
-	    this._container.title = "Show features under point";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(e) {
-	        
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	map.fireEvent("featuresactivate", e);
-	        	L.DomUtil.addClass(this, 'active');
-	        } else {
-	        	map.fireEvent("featuresdeactivate", e);
-	        	L.DomUtil.removeClass(this, 'active');
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.features = function (options) {
-	return new L.Control.Features(options);
-};
-	
-})(L);
-
 /*
  * Google layer using Google Maps API
  */
@@ -3943,6 +3925,64 @@ L.Google.asyncInitialize = function() {
 
 'use strict';
 
+L.Control.Features = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-location-arrow fa-rotate-180',
+	    modal: false
+	},
+	
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
+	    this._container.title = "Show features under point";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(e) {
+	        
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	map.fireEvent("featuresactivate", e);
+	        	L.DomUtil.addClass(this, 'active');
+	        } else {
+	        	map.fireEvent("featuresdeactivate", e);
+	        	L.DomUtil.removeClass(this, 'active');
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.features = function (options) {
+	return new L.Control.Features(options);
+};
+	
+})(L);
+
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
 L.Control.Legend = L.Control.extend({
 	_active: false,
 	_map: null,
@@ -4119,6 +4159,44 @@ L.Control.ZoomBox = L.Control.extend({
 
 L.control.zoomBox = function (options) {
   return new L.Control.ZoomBox(options);
+};
+L.Control.Zoommin = L.Control.extend({
+    _active: false,
+    _map: null,
+    includes: L.Mixin.Events,
+    options: {
+        position: 'topleft',
+        className: 'fa fa-home',
+        modal: false
+    },
+    onAdd: function (map) {
+        this._map = map;
+        this._container = L.DomUtil.create('div', 'leaflet-zoom-box-control leaflet-bar');
+        this._container.title = "Zoom to max extent";
+        var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent
+            .on(this._container, 'dblclick', L.DomEvent.stop)
+            .on(this._container, 'click', L.DomEvent.stop)
+            .on(this._container, 'click', function(){
+                this._active = !this._active;
+             
+				map.setView(this.options.center, this.options.zoom);				
+            }, this);
+        return this._container;
+    },
+    activate: function() {
+        L.DomUtil.addClass(this._container, 'active');
+    },
+    deactivate: function() {
+        L.DomUtil.removeClass(this._container, 'active');
+        this._active = false;
+    }
+});
+
+L.control.zoommin = function (options) {
+  return new L.Control.Zoommin(options);
 };
 L.Control.Zoomout = L.Control.extend({
     _active: false,
@@ -4396,8 +4474,8 @@ angular.module("geo.map", [])
 
 })(angular, window);
 angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\r\n	<span id=\"baselayerCtrl\">\r\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\r\n	</span>\r\n</span>");
-$templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\r\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\r\n		<div class=\"pathContent\">\r\n			<div ng-repeat=\"(key, feature) in features.data\">\r\n				{{mappings[key].title}}  ({{feature}})\r\n			</div>\r\n			<div ng-hide=\"features.count\">No nearby features</div>\r\n		</div>\r\n	</div>\r\n</div>\r\n");
 $templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\r\n	<div class=\"row\">\r\n		<div class=\"col-md-4\">\r\n			<span class=\"graph-brand\">Path Elevation</span>\r\n		</div>	\r\n		<div class=\"col-md-8\">\r\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\r\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\r\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \r\n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\r\n				</div>	\r\n				<div class=\"btn-group\">	\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \r\n							ng-click=\"showInfo = !showInfo\">\r\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>\r\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\r\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>				\r\n				</div>\r\n			</div>\r\n		</div>	\r\n	</div>\r\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\r\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\r\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\r\n</div>");
 $templateCache.put("map/elevation/elevationInfo.html","<div>\r\nThe elevation graph is calculated from the 3\" DEM data. \r\nThe data is held in a grid with a cell size of approx. 90 m. \r\nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \r\n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\r\n<br/>\r\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \r\nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \r\nwater table appear above the elevation of the surface on occasions. \r\nData availability will be indicated by the button labelled \"Show Water Table\". \r\n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\r\n</div>\r\n");
+$templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\r\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\r\n		<div class=\"pathContent\">\r\n			<div ng-repeat=\"(key, feature) in features.data\">\r\n				{{mappings[key].title}}  ({{feature}})\r\n			</div>\r\n			<div ng-hide=\"features.count\">No nearby features</div>\r\n		</div>\r\n	</div>\r\n</div>\r\n");
 $templateCache.put("map/layerinspector/layerInspector.html","<div class=\"interactionPanel\">\r\n	<div class=\"exp-block\" ng-show=\"active\" style=\"height:100%\">\r\n		<div class=\"exp-header\">\r\n			<div class=\"interactionPanelHeader\" ng-hide=\"hidename\">\r\n				<a href=\"javascript:;\" ng-click=\"click()\" ng-show=\"showClose\" title=\"Name is {{name || active.name}}\">{{name || active.name}}</a>\r\n				<span ng-hide=\"showClose\">{{name || active.name}}</span>\r\n			</div>\r\n			<div style=\"float:right\">\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\" \r\n						ng-click=\"toggleShow(active)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!active.displayed), \'fa-eye\':active.displayed}\"></i></a>\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Collapse extra information\" ng-show=\"showClose\"\r\n						ng-click=\"click()\"><i class=\"fa fa-caret-square-o-up\"></i></a>\r\n			</div>\r\n		</div>\r\n		<div>\r\n			<div class=\"thumbNailContainer\" ng-show=\"active.thumbUrl\">\r\n				<img width=\"100\" ng-src=\"{{active.thumbUrl}}\" class=\"img-thumbnail\" alt=\"{{active.description}}\"></img>\r\n			</div>\r\n			<strong>Opacity</strong><br/>\r\n			<span explorer-layer-slider layer=\"active.layer\" title=\"Change the opacity of the selected layer when shown on the map\" class=\"opacitySlider\"></span>\r\n			<p/>\r\n			{{active.description}}\r\n		</div> \r\n	</div>\r\n</div>");
 $templateCache.put("map/point/point.html","<exp-modal class=\"pointInspector ng-cloak\" icon-class=\"fa-map-marker\" is-open=\"point\" on-close=\"clearPoint()\" title=\"Features within approx. 2km\">	\r\n	<div class=\"pointContent\" ng-controller=\"OverFeatureCtrl as over\">\r\n		<div style=\"padding-bottom:7px;\">Elev. {{point.z | length : true}}, Lat. {{point.y | number : 3}}&deg;, Long. {{point.x | number:3}}&deg;</div>\r\n		<div ng-show=\"featuresInfo.results.length > 0\">\r\n			<div>\r\n				<div style=\"float:left; padding-bottom:10px\">{{allHidden() && \"Show\" || \"Hide\"}} all features</div>\r\n				<div style=\"float: right\">				\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show all features on map\"\r\n						ng-click=\"toggleAll()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':allHidden(), \'fa-eye\':!allHidden()}\"></i></a>\r\n				</div>\r\n			</div>\r\n			<div style=\"clear:both;\"></div>\r\n		</div>\r\n		<div ng-hide=\"featuresInfo.results.length > 0\">No nearby features.</div>\r\n	\r\n		<div ng-repeat=\"item in featuresInfo.results | featureGroups\" ng-class=\"{\'underlined\':!$last}\">\r\n			<div ng-show=\"greaterThanOneItem()\"  ng-mouseover=\"over.groupEnter(featuresInfo.results, item)\" ng-mouseout=\"over.groupLeave(featuresInfo.results, item)\">\r\n				<div style=\"float:left\">\r\n					<button type=\"button\" class=\"undecorated\" ng-click=\"expanded = !expanded\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':expanded,\'fa-caret-right\':(!expanded)}\"></i></button></button><strong>{{metadata[item].heading}}</strong>\r\n				</div>\r\n				<div style=\"float: right\">	\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"   \r\n						ng-click=\"groupShow(item)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!oneShowing()), \'fa-eye\':oneShowing()}\"></i></a>\r\n				</div>\r\n				<div style=\"clear:both;\"></div>\r\n			</div>\r\n			<div ng-repeat=\"feature in featuresInfo.results | filterGroupsByLayername : item\" ng-show=\"expanded || !greaterThanOneItem()\">\r\n				<div ng-mouseover=\"over.mouseenter(feature)\" ng-mouseout=\"over.mouseleave(feature)\" ng-click=\"over.click()\">\r\n					<div style=\"float: left;\" ng-class=\"{\'pad-left-big\':greaterThanOneItem()}\">\r\n						<button type=\"button\" ng-click=\"feature.expanded = !feature.expanded\" class=\"undecorated\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':feature.expanded,\'fa-caret-right\':(!feature.expanded)}\"></i></button>\r\n						<a href=\"javascript:;\" class=\"featureLink\" title=\"{{metadata[feature.layerName].description}}\"\r\n							ng-click=\"makeFeatureActive()\" ng-class=\"{active:(feature.active)}\">{{createTitle()}}</a>\r\n					</div>\r\n					<div style=\"float: right\">	\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Graph elevation changes for feature\'s path.\"\r\n							ng-click=\"elevationPath(metadata[feature.layerName].label + \' elevation plot\')\"><i class=\"fa fa-align-left fa-rotate-270\" ng-show=\"feature.geometryType == \'esriGeometryPolyline\'\"></i></a>					\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"\r\n							ng-click=\"toggleShow(feature)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!feature.displayed), \'fa-eye\':feature.displayed}\"></i> </a>\r\n					</div>\r\n				</div>\r\n				<div style=\"clear:both;\" ng-init=\"featureMeta = metadata[feature.layerName]\">\r\n					<div ng-repeat=\"attribute in featureMeta.attributes\" ng-show=\"feature.expanded\">\r\n						<div style=\"width:7em;float:left;font-weight:bold;padding-left:9px\">{{attribute.label}}</div>\r\n						<div style=\"min-width:12em;width:12em;margin-left:7.5em;\" class=\"ellipsis\" title=\"{{feature.attributes[attribute.key]}}\">{{feature.attributes[attribute.key] | dashNull}}</div>\r\n					</div>\r\n					<div style=\"border-bottom:1px solid lightgray\" ng-show=\"feature.expanded && !last\"></div>\r\n				</div>\r\n			</div>	\r\n		</div>\r\n	</div>\r\n</exp-modal>");}]);
