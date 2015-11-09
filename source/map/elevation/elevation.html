@@ -14,7 +14,7 @@
 							ng-click="showInfo = !showInfo">
 						<i class="fa fa-info-circle" role="presentation" style="font-size:16px; color:black"></i>
 					</button>
-					<exp-info title="Graph Information" style="width:400px;position:absolute;bottom:-80px;right:60px" is-open="showInfo"><div mars-info-elevation></div></exp-info>				
+					<exp-info title="Graph Information" style="width:400px;position:absolute;bottom:-80px;right:60px" show-close="true" is-open="showInfo"><div mars-info-elevation></div></exp-info>				
 					<button type="button" class="btn btn-default" title="Close graphs" ng-click="close()">
 						<i class="fa fa-times-circle" role="presentation" style="font-size:16px; color:black"></i>
 					</button>				
@@ -25,4 +25,10 @@
 	<div explorer-graph data="paths" config="config" click="graphClick(event)" move="graphMove(event)" leave="graphLeave(event)" enter="graphEnter(event)" show-zero-line="true"></div>
 	<div exp-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>
 	<div exp-point point="point" class="featuresInfo" style="display:none"></div>
+	<div class="elevationHoverPanel" mars-point-info ng-show="position"
+		ng-attr-style="top:{{position.pageY - 70}}px;left:{{position.pageX * 0.94 - 10}}px;">
+		<div class="ng-binding"><strong>Elev.:</strong>{{position.point.z|number:0}}m</div>
+		<div class="ng-binding"><strong>Dist.:</strong>{{length * position.percentX * 0.01|length : true }}</div>
+	</div>
+	</div>
 </div>

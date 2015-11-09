@@ -140,6 +140,7 @@ angular.module("geo.elevation", [
 				
 				if(scope.position) {
 					point = scope.position.point;
+					window.eve = event;
 					scope.position.markerLonlat = crosshairService.move(point);
 					deferredView();
 				}
@@ -180,6 +181,40 @@ angular.module("geo.elevation", [
 				featureSummaryService.cancelView();
 				scope.featuresUnderPoint = null;
 			}
+		}
+	};
+}])
+
+.directive('marsPanTo', ['$rootScope', 'mapService', function($rootScope, mapService) {
+	var DEFAULTS = {
+		bufferRatio: 0.2,
+		eventName: "elevation.plot.data",
+		options: {
+			paddingTopLeft:[30, 30], 
+			paddingBottomRight:[130, 30]
+		}		
+	};
+	return {
+		restrict: 'AE',
+		scope: {
+			bufferRatio: "=",
+			eventName: "=",
+			options: "="
+		},
+		link: function(scope) {
+			angular.forEach(DEFAULTS, function(value, key) {
+				if(typeof scope[key] == "undefined") {
+					scope[key] = value;
+				}
+			});
+						
+			$rootScope.$on(scope.eventName, function(event, data) {
+				var line = L.polyline(data.geometry);
+				var bounds = line.getBounds();
+				mapService.getMap().then(function(map) {
+					map.fitBounds(bounds, scope.options);
+				});
+			});	
 		}
 	};
 }])
