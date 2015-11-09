@@ -13,7 +13,8 @@ L.Control.Legend = L.Control.extend({
 	options: {
 	    position: 'topleft',
 	    className: 'fa fa-list',
-	    modal: false
+	    modal: false,
+		url: 'resources/img/mapkey_topo2.png'
 	},
 	
 	onAdd: function (map) {
@@ -34,7 +35,7 @@ L.Control.Legend = L.Control.extend({
 
 	        	this._legend.onAdd = function (map) {
 	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
-					html = '<img src="resources/img/mapkey_topo2.png"></img>';
+					html = '<img src="' + this.options.url + '"></img>';
 
 	        		div.innerHTML = html;
 	        		return div;
