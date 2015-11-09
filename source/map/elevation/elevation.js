@@ -187,17 +187,15 @@ angular.module("geo.elevation", [
 
 .directive('marsPanTo', ['$rootScope', 'mapService', function($rootScope, mapService) {
 	var DEFAULTS = {
-		bufferRatio: 0.2,
 		eventName: "elevation.plot.data",
 		options: {
-			paddingTopLeft:[30, 30], 
-			paddingBottomRight:[130, 30]
+			paddingTopLeft:[50, 50], 
+			paddingBottomRight:[50, 250]
 		}		
 	};
 	return {
 		restrict: 'AE',
 		scope: {
-			bufferRatio: "=",
 			eventName: "=",
 			options: "="
 		},
@@ -350,7 +348,7 @@ angular.module("geo.elevation", [
 			},
 	
 			pathShow : function(latlngs) {
-				var lineLayer = L.polyline(latlngs, {color: 'black', weight:2}).addTo(map);
+				var lineLayer = L.polyline(latlngs, {color: 'red', weight:3, opacity:0.8}).addTo(map);
 				return lineLayer;
 			},
 	
