@@ -1109,119 +1109,6 @@ angular.module("explorer.crosshair", ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-
-(function(angular){
-'use strict';
-
-angular.module("geo.draw", ['geo.map'])
-
-.directive("geoDraw", ['$log', '$rootScope', 'drawService', function($log, $rootScope, drawService) {
-	var DEFAULTS = {
-		rectangleEvent : "geo.draw.rectangle.created",
-		lineEvent : "geo.draw.line.created"
-	};
-	
-	
-	return {
-		restrict : "AE",
-		scope : {
-			data: "=",
-			rectangleEvent : "@",
-			lineEvent : "@"
-		},
-		link : function(scope, element, attrs, ctrl) {
-			
-			angular.forEach(DEFAULTS, function(value, key) {
-				if(!scope[key]) {
-					scope[key] = value;
-				}
-			});
-			
-				
-			drawService.createControl(scope);
-		}
-	};
-}])
-
-.factory("drawService", ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
-	var drawControl,
-		drawer,
-		featureGroup,
-		rectangleDeferred;	
-	
-	return {
-		createControl : function(parameters) {
-			if(drawControl) {
-				$q.when(drawControl);
-			}
-			
-			return mapService.getMap().then(function(map) {
-				var drawnItems = new L.FeatureGroup(),
-				    options = { 
-				       edit: {
-				          featureGroup: drawnItems
-				       }
-				    };
-	
-				if(parameters.data) {
-					angular.extend(options, parameters.data);
-				}			
-				
-				featureGroup = parameters.drawnItems = drawnItems;
-				
-				map.addLayer(drawnItems);
-				// Initialise the draw control and pass it the FeatureGroup of editable layers
-				drawControl = new L.Control.Draw(options);
-				map.addControl(drawControl);
-				map.on("draw:created", function(event) {
-					({
-						polyline : function() {
-							var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
-							$rootScope.$broadcast(parameters.lineEvent, data);
-						},
-						// With rectangles only one can be drawn at a time.
-						rectangle : function() {
-							var data = {bounds:event.layer.getBounds()};
-							rectangleDeferred.resolve(data);
-							rectangleDeferred = null;
-						}
-					})[event.layerType]();
-				});
-				
-				return drawControl;
-			});
-		},
-		
-		cancelDrawRectangle : function() {
-			if(rectangleDeferred) {
-				rectangleDeferred.reject();
-				rectangleDeferred = null;
-				if(drawer) {
-					drawer.disable();
-				}
-			}
-		},
-		
-		drawRectangle : function() {
-			this.cancelDrawRectangle();
-			rectangleDeferred = $q.defer();
-			if(drawer) {
-				drawer.enable();
-			} else {
-				mapService.getMap().then(function(map) {
-					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline);
-					drawer.enable();
-				});
-			}			
-			return rectangleDeferred.promise;
-		}
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 /**
  * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
  */
@@ -1584,6 +1471,119 @@ angular.module("geo.elevation", [
 });
 
 })(angular, Exp, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular){
+'use strict';
+
+angular.module("geo.draw", ['geo.map'])
+
+.directive("geoDraw", ['$log', '$rootScope', 'drawService', function($log, $rootScope, drawService) {
+	var DEFAULTS = {
+		rectangleEvent : "geo.draw.rectangle.created",
+		lineEvent : "geo.draw.line.created"
+	};
+	
+	
+	return {
+		restrict : "AE",
+		scope : {
+			data: "=",
+			rectangleEvent : "@",
+			lineEvent : "@"
+		},
+		link : function(scope, element, attrs, ctrl) {
+			
+			angular.forEach(DEFAULTS, function(value, key) {
+				if(!scope[key]) {
+					scope[key] = value;
+				}
+			});
+			
+				
+			drawService.createControl(scope);
+		}
+	};
+}])
+
+.factory("drawService", ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
+	var drawControl,
+		drawer,
+		featureGroup,
+		rectangleDeferred;	
+	
+	return {
+		createControl : function(parameters) {
+			if(drawControl) {
+				$q.when(drawControl);
+			}
+			
+			return mapService.getMap().then(function(map) {
+				var drawnItems = new L.FeatureGroup(),
+				    options = { 
+				       edit: {
+				          featureGroup: drawnItems
+				       }
+				    };
+	
+				if(parameters.data) {
+					angular.extend(options, parameters.data);
+				}			
+				
+				featureGroup = parameters.drawnItems = drawnItems;
+				
+				map.addLayer(drawnItems);
+				// Initialise the draw control and pass it the FeatureGroup of editable layers
+				drawControl = new L.Control.Draw(options);
+				map.addControl(drawControl);
+				map.on("draw:created", function(event) {
+					({
+						polyline : function() {
+							var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
+							$rootScope.$broadcast(parameters.lineEvent, data);
+						},
+						// With rectangles only one can be drawn at a time.
+						rectangle : function() {
+							var data = {bounds:event.layer.getBounds()};
+							rectangleDeferred.resolve(data);
+							rectangleDeferred = null;
+						}
+					})[event.layerType]();
+				});
+				
+				return drawControl;
+			});
+		},
+		
+		cancelDrawRectangle : function() {
+			if(rectangleDeferred) {
+				rectangleDeferred.reject();
+				rectangleDeferred = null;
+				if(drawer) {
+					drawer.disable();
+				}
+			}
+		},
+		
+		drawRectangle : function() {
+			this.cancelDrawRectangle();
+			rectangleDeferred = $q.defer();
+			if(drawer) {
+				drawer.enable();
+			} else {
+				mapService.getMap().then(function(map) {
+					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline);
+					drawer.enable();
+				});
+			}			
+			return rectangleDeferred.promise;
+		}
+	};
+}]);
+
+})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2140,41 +2140,6 @@ angular.module('explorer.layers', ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular) {	
-
-'use strict';
-
-angular.module('explorer.layer.inpector', ['explorer.layers'])
-
-.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
-	return {
-		restrict:"AE",
-		scope:{
-			click : "&",
-			showClose : "=?",
-			active:"=",
-			name:"=?"
-		},
-		controller : ['$scope', function($scope){
-			$scope.toggleShow = function() {
-				var active = this.active;
-				if(!active.isWrapped) {
-					active = layerService.decorate(active);
-					active.init();
-					active.show = true;
-					active.showExtra = true;
-				}
-				active.displayed = active.handleShow();
-			};
-		}],		
-		templateUrl : "map/layerinspector/layerInspector.html"
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular) {
 'use strict';
 
@@ -2217,35 +2182,34 @@ angular.module("explorer.layer.slider", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular) {
+(function(angular) {	
+
 'use strict';
 
-angular.module("explorer.mapstate", [])
+angular.module('explorer.layer.inpector', ['explorer.layers'])
 
-.factory('mapStateService', ['$log', 'mapService', 'persistService', function($log, mapService, persistService) {
-	/*
-	 * This state is for the map. It keeps all the details in the 
-	 * localStorage so that it 
-	 */
-	var lastTime = 2400000000000;
-	return {		
-		persist : function() {
-			var now = Date.now();
-			if(lastTime - 100 > now) {
-				persistService.setItem('marsMapTab', mapService.getState());
-			} else {
-				// $log.debug("We got a request too quickly");
-			}
-			lastTime = now;
+.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
+	return {
+		restrict:"AE",
+		scope:{
+			click : "&",
+			showClose : "=?",
+			active:"=",
+			name:"=?"
 		},
-		
-		restore : function() {
-			persistService.getItem("marsMapTab").then(function(state) {
-				if(state) {
-					mapService.setState(state);
+		controller : ['$scope', function($scope){
+			$scope.toggleShow = function() {
+				var active = this.active;
+				if(!active.isWrapped) {
+					active = layerService.decorate(active);
+					active.init();
+					active.show = true;
+					active.showExtra = true;
 				}
-			});
-		}
+				active.displayed = active.handleShow();
+			};
+		}],		
+		templateUrl : "map/layerinspector/layerInspector.html"
 	};
 }]);
 
@@ -2315,6 +2279,42 @@ angular.module('geo.maphelper', ['geo.map'])
 }]);
 
 })(angular, window, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular) {
+'use strict';
+
+angular.module("explorer.mapstate", [])
+
+.factory('mapStateService', ['$log', 'mapService', 'persistService', function($log, mapService, persistService) {
+	/*
+	 * This state is for the map. It keeps all the details in the 
+	 * localStorage so that it 
+	 */
+	var lastTime = 2400000000000;
+	return {		
+		persist : function() {
+			var now = Date.now();
+			if(lastTime - 100 > now) {
+				persistService.setItem('marsMapTab', mapService.getState());
+			} else {
+				// $log.debug("We got a request too quickly");
+			}
+			lastTime = now;
+		},
+		
+		restore : function() {
+			persistService.getItem("marsMapTab").then(function(state) {
+				if(state) {
+					mapService.setState(state);
+				}
+			});
+		}
+	};
+}]);
+
+})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3750,6 +3750,64 @@ function OverFeatureCtrl($filter, pointService) {
 
 })(angular, L, window);
 
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
+L.Control.Features = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-location-arrow fa-rotate-180',
+	    modal: false
+	},
+	
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
+	    this._container.title = "Show features under point";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(e) {
+	        
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	map.fireEvent("featuresactivate", e);
+	        	L.DomUtil.addClass(this, 'active');
+	        } else {
+	        	map.fireEvent("featuresdeactivate", e);
+	        	L.DomUtil.removeClass(this, 'active');
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.features = function (options) {
+	return new L.Control.Features(options);
+};
+	
+})(L);
+
 /*
  * Google layer using Google Maps API
  */
@@ -3950,64 +4008,54 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
+L.Control.MousePosition = L.Control.extend({
+  options: {
+    position: 'bottomleft',
+    separator: ' : ',
+    emptyString: 'Unavailable',
+    lngFirst: false,
+    numDigits: 5,
+    lngFormatter: undefined,
+    latFormatter: undefined,
+    prefix: ""
+  },
 
-(function(L) {
+  onAdd: function (map) {
+    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+    L.DomEvent.disableClickPropagation(this._container);
+    map.on('mousemove', this._onMouseMove, this);
+    this._container.innerHTML=this.options.emptyString;
+    return this._container;
+  },
 
-'use strict';
+  onRemove: function (map) {
+    map.off('mousemove', this._onMouseMove);
+  },
 
-L.Control.Features = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-location-arrow fa-rotate-180',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
-	    this._container.title = "Show features under point";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
+  _onMouseMove: function (e) {
+    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
+    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
+    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    var prefixAndValue = this.options.prefix + ' ' + value;
+    this._container.innerHTML = prefixAndValue;
+  }
 
-        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(e) {
-	        
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	map.fireEvent("featuresactivate", e);
-	        	L.DomUtil.addClass(this, 'active');
-	        } else {
-	        	map.fireEvent("featuresdeactivate", e);
-	        	L.DomUtil.removeClass(this, 'active');
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
 });
 
-L.control.features = function (options) {
-	return new L.Control.Features(options);
-};
-	
-})(L);
+L.Map.mergeOptions({
+    positionControl: false
+});
 
+L.Map.addInitHook(function () {
+    if (this.options.positionControl) {
+        this.positionControl = new L.Control.MousePosition();
+        this.addControl(this.positionControl);
+    }
+});
+
+L.control.mousePosition = function (options) {
+    return new L.Control.MousePosition(options);
+};
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -4074,54 +4122,6 @@ L.control.legend = function (options) {
 	
 })(L);
 
-L.Control.MousePosition = L.Control.extend({
-  options: {
-    position: 'bottomleft',
-    separator: ' : ',
-    emptyString: 'Unavailable',
-    lngFirst: false,
-    numDigits: 5,
-    lngFormatter: undefined,
-    latFormatter: undefined,
-    prefix: ""
-  },
-
-  onAdd: function (map) {
-    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
-    L.DomEvent.disableClickPropagation(this._container);
-    map.on('mousemove', this._onMouseMove, this);
-    this._container.innerHTML=this.options.emptyString;
-    return this._container;
-  },
-
-  onRemove: function (map) {
-    map.off('mousemove', this._onMouseMove);
-  },
-
-  _onMouseMove: function (e) {
-    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
-    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
-    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    var prefixAndValue = this.options.prefix + ' ' + value;
-    this._container.innerHTML = prefixAndValue;
-  }
-
-});
-
-L.Map.mergeOptions({
-    positionControl: false
-});
-
-L.Map.addInitHook(function () {
-    if (this.options.positionControl) {
-        this.positionControl = new L.Control.MousePosition();
-        this.addControl(this.positionControl);
-    }
-});
-
-L.control.mousePosition = function (options) {
-    return new L.Control.MousePosition(options);
-};
 L.Control.ZoomBox = L.Control.extend({
     _active: false,
     _map: null,
