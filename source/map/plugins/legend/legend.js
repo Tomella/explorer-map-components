@@ -30,21 +30,41 @@ L.Control.Legend = L.Control.extend({
 	            .on(this._container, 'dblclick', L.DomEvent.stop)
 	            .on(this._container, 'click', L.DomEvent.stop)
 	            .on(this._container, 'click', function(){
-	        this._active = !this._active;
+	        them._active = !them._active;
 	       
-	        if(this._active) {
-	        	this._legend = L.control({position: 'topleft'});
+	        if(them._active) {
+	        	them._legend = L.control({position: 'topleft'});
 
-	        	this._legend.onAdd = function (map) {
+	        	them._legend.onAdd = function (map) {
 	        		var div = L.DomUtil.create('div', them.options.overlayClass),
 						html = '<img src="' + them.options.url + '"></img>';
-
+					
+					L.DomEvent.disableClickPropagation(div).disableScrollPropagation(div).on(div, 'keydown', function(event) {
+						if (event.keyCode == 24) {
+							this.scrollTop -= 20;
+							stop(event);
+						} else if (event.keyCode == 25) {
+							this.scrollTop += 20;
+							stop(event);
+						}
+						
+						function stop(event) {
+							event.stopPropogation();
+							event.preventDefault();
+						}
+					});
+						
 	        		div.innerHTML = html;
+					div.tabIndex = 0;
+					div.focus();
 	        		return div;
 	        	};
-	        	map.addControl(this._legend);
+	        	map.addControl(them._legend);
+	    		L.DomUtil.addClass(them._container, 'active');
 	        } else {
-	        	map.removeControl(this._legend);
+				
+	        	map.removeControl(them._legend);
+				L.DomUtil.removeClass(them._container, 'active');
 			}
 	    });
         return this._container;
