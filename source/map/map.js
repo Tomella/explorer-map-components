@@ -1,4 +1,4 @@
-(function(angular, global) {
+(function(angular, L, global) {
 
 'use strict';
 
@@ -99,7 +99,8 @@ angular.module("geo.map", [])
 	
 	service.addMap = function(config) {
 		var map,
-			zoomControl;
+			zoomControl,
+			legendControlOptions = {};
 		
 		if(!config.name) {
 			config.name = START_NAME + (nameIndex++);
@@ -122,6 +123,9 @@ angular.module("geo.map", [])
 					}					
 				} else {
 					addLayer(layer, map, map);
+					if(layer.pseudoBaseLayer && layer.legendUrl) {
+						legendControlOptions.url = layer.legendUrl;
+					}
 				}
 			});
 		}
@@ -153,8 +157,8 @@ angular.module("geo.map", [])
 		if(waiters) {
 			waiters.resolve(map);
 		}
-		
-		map.addControl(L.control.legend());
+		// This is the pseudo base layers
+		map.addControl(L.control.legend(legendControlOptions));
 		
 		return map;
 		
@@ -200,4 +204,4 @@ angular.module("geo.map", [])
 	
 }]);
 
-})(angular, window);
+})(angular, L, window);
