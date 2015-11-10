@@ -12,12 +12,14 @@ L.Control.Legend = L.Control.extend({
 	includes: L.Mixin.Events,
 	options: {
 	    position: 'topleft',
+		overlayClass: 'leaflet-legend',
 	    className: 'fa fa-list',
 	    modal: false,
-		url: 'resources/img/mapkey_topo2.png'
+		url: 'resources/img/NationalLegend.png'
 	},
 	
 	onAdd: function (map) {
+		var them = this;
 	    this._map = map;
 	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
 	    this._container.title = "Show legend";
@@ -34,8 +36,8 @@ L.Control.Legend = L.Control.extend({
 	        	this._legend = L.control({position: 'topleft'});
 
 	        	this._legend.onAdd = function (map) {
-	        		var div = L.DomUtil.create('div', 'leaflet-legend'),
-					html = '<img src="' + this.options.url + '"></img>';
+	        		var div = L.DomUtil.create('div', them.options.overlayClass),
+						html = '<img src="' + them.options.url + '"></img>';
 
 	        		div.innerHTML = html;
 	        		return div;
