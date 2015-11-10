@@ -9,9 +9,19 @@
 angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstrap-slider'])
 
 .directive('geoBaselayerControl', ['$rootScope', 'mapHelper', 'mapService', function($rootScope, mapHelper, mapService) {
+	var DEFAULTS = {
+		maxZoom: 12
+	};
+	
 	return {
 		template : '<slider min="0" max="1" step="0.1" ng-model="slider.opacity" updateevent="slideStop"></slider>',
+		scope: {
+			maxZoom: "="
+		},
 		link : function(scope, element) {
+			if(typeof scope.maxZoom == "undefined") {
+				scope.maxZoom = DEFAULTS.maxZoom;
+			}
 			scope.slider = {
 				opacity:1,
 				visibility:true, 
@@ -33,12 +43,12 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 				function execute() {
 					var zoom = map.getZoom();
 
-					if(scope.lastZoom < 12) {
+					if(scope.lastZoom < scope.maxZoom) {
 						scope.lastOpacity = scope.layer.options.opacity;
 					}
 					
-					if(zoom == 12) {
-						if(scope.lastZoom > 12) {
+					if(zoom == scope.maxZoom) {
+						if(scope.lastZoom > scope.maxZoom) {
 							if(scope.lastOpacity < 0.5) {					
 								scope.slider.opacity = scope.lastOpacity;
 								scope.layer.setOpacity(scope.lastOpacity);					
@@ -52,13 +62,13 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 						}
 						scope.slider.visibility = false;
 						setEnabled(false);
-					} else if(zoom < 12) {
-						if(scope.lastZoom <= 12) {
+					} else if(zoom < scope.maxZoom) {
+						if(scope.lastZoom <= scope.maxZoom) {
 							scope.slider.opacity = scope.lastOpacity;
 							scope.layer.setOpacity(scope.lastOpacity);
 						}
 						setEnabled(true);
-					} else if(zoom > 12 && scope.lastZoom < 13) {
+					} else if(zoom > scope.maxZoom && scope.lastZoom <= scope.maxZoom) {
 						scope.slider.visibility = false;
 						scope.slider.opacity = 0;
 						setEnabled(false);
