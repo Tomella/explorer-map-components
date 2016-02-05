@@ -4382,7 +4382,6 @@ angular.module("geo.map", [])
 	var START_NAME = "MAP_",
 		nameIndex = 0,
 		lastMap,
-		pseudoBaseLayers = [],
 		waiters,
 		layerControl,
 		groups = {},
@@ -4438,7 +4437,7 @@ angular.module("geo.map", [])
 	service.addMap = function(config) {
 		var map,
 			zoomControl,
-			legendControlOptions = {};
+			legendControlOptions = null;
 		
 		if(!config.name) {
 			config.name = START_NAME + (nameIndex++);
@@ -4462,7 +4461,9 @@ angular.module("geo.map", [])
 				} else {
 					addLayer(layer, map, map);
 					if(layer.pseudoBaseLayer && layer.legendUrl) {
-						legendControlOptions.url = layer.legendUrl;
+						legendControlOptions = {
+							url: layer.legendUrl
+						};
 					}
 				}
 			});
@@ -4496,7 +4497,9 @@ angular.module("geo.map", [])
 			waiters.resolve(map);
 		}
 		// This is the pseudo base layers
-		map.addControl(L.control.legend(legendControlOptions));
+		if(legendControlOptions) {
+			map.addControl(L.control.legend(legendControlOptions));
+		}
 		
 		return map;
 		
