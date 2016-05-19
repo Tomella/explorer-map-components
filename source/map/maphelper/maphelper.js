@@ -9,20 +9,51 @@
 
 angular.module('geo.maphelper', ['geo.map'])
 
-.factory("mapHelper", ["mapService",  "$timeout", "$q", "$rootScope", "flashService", 
-                       function(mapService,  $timeout, $q, $rootScope, flashService){
+.factory("mapHelper", ["mapService", "$timeout", "$q", "$rootScope", "flashService",
+                       function(mapService, $timeout, $q, $rootScope, flashService){
+
 	var  helper = { 
 		timeoutPeriod: 200, 
 		timeout : null,
 		callbacks:{}, 
-		checkMarkers:function(){}, 
+		checkMarkers:function(){},
 		zoomToMarkPoints:function(results, marker){
+            console.log("zooming to  " + results[0]);
 			mapService.getMap().then(function(map) {
+                console.log("really zooming to  " + results[0]);
 				map.setView(results[0], 12, {animate:true});
 			});
 		}, 
 		zoomToLonLats:function(mapService){},
-		markPoint:function(mapService){},
+        zoomToBounds:function(bounds){
+            mapService.getMap().then(function(map) {
+                map.setView(results[0], 12, {animate:true});
+            });
+        },
+        zoomOut:function(factor){
+            mapService.getMap().then(function(map) {
+                map.zoomOut(factor);
+            });
+        },
+        addLayer:function(layer) {
+            mapService.getMap().then(function(map) {
+                layer.addTo(map);
+            });
+        },
+        removeLayer:function(layer) {
+            mapService.getMap().then(function(map) {
+                map.removeLayer(layer);
+            });
+        },
+        fireEvent:function(name, event) {
+            mapService.getMap().then(function(map) {
+                map.fireEvent(name, event);
+            });
+        },
+        showGrid:function(show) {
+            /// TODO
+        },
+        markPoint:function(mapService){},
 		getPseudoBaseLayer:function(){
 			return mapService.getMap().then(function(map) {
 				var response = null;

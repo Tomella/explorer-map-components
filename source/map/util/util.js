@@ -9,6 +9,7 @@ if(!Exp.Util) {
 	Exp.Util = {};
 }
 
+Exp.Util.toGeoJSONFeature = toGeoJSONFeature;
 Exp.Util.toLineStringWkt = toLineStringWkt;
 Exp.Util.intersects = intersects;
 Exp.Util.boundsToWktPoly = boundsToWktPoly;
@@ -215,6 +216,23 @@ function toLineStringWkt(latlngs) {
     	});
     }
     return "LINESTRING(" + coords.join(",") + ")";
+}
+
+function toGeoJSONFeature(latlngs) {
+    var lng, lat, coords = [];
+    if(latlngs) {
+        latlngs.forEach(function(latlng) {
+            coords.push([latlng.lng, latlng.lat]);
+        });
+    }
+    return {
+        type: "Feature",
+        properties: {prop0: "value0"},
+        geometry: {
+            type: "LineString",
+            coordinates: coords
+        }
+    };
 }
 
 // Plugged in from

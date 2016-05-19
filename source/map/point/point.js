@@ -23,6 +23,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 
 .directive("expClickMapPoint", ['pointService', function(pointService) {
 	return {
+        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
 		restrict:'AE',
 		scope : {
 		},		

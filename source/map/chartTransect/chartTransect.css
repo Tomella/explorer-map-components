@@ -1,0 +1,107 @@
+/* ----- LINE CHART ------*/
+
+
+.chart-transect-legend {
+    width:400px;
+    position:absolute;
+    bottom:20px;
+    right:257px
+}
+
+#transectChartD3Legend {
+  margin-right: 25px;
+  width: 235px;
+  margin-top: 30px;
+  clear: both;
+  float: right;
+  display: inline-block;
+}
+
+#transectChartD3Legend .rect {
+    width: 15px;
+    height: 5px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-top: -2px;
+    opacity: 0.6;
+}
+
+.fault-legend {
+  position: absolute;
+  left: 50%;
+  width: 210px;
+  margin-left: -200px;
+  padding: 6px 10px;
+  color: #a94442;
+  background: rgba(250,180,180,0.2);
+  border-radius: 3px;
+  top: 5px;
+}
+
+.fault-transect {
+  position: absolute;
+  z-index: -1;
+  top: 50px;
+  bottom: 0px;
+  width: 3px;
+  background: rgb(250, 200, 200);
+}
+
+#transectChart .fault-legend-color {
+  height: 30px;
+  display: inline-block;
+  background: rgba(250, 180, 180, 1);
+  width: 10px;
+}
+
+.fault-legend strong {
+    margin: -29px 0px 5px 20px;
+    display: block;
+}
+
+.danger-pulse {
+    animation-name: danger-pulse;
+    animation-duration: 1.3s;
+    animation-iteration-count: 3;
+    animation-timing-function: ease-in-out;
+    animation-direction: alternate;
+}
+
+@keyframes danger-pulse {
+    0% {
+        -webkit-box-shadow: 0px 0px 20px 5px rgba(228,153,153,1);
+        -moz-box-shadow: 0px 0px 20px 5px rgba(228,153,153,1);
+        box-shadow: 0px 0px 20px 5px rgba(228,153,153,1);
+    }
+    100% {
+        -webkit-box-shadow: none;
+        -moz-box-shadow: none;
+        box-shadow: none;
+    }
+}
+
+#transectChartD3Legend code {
+    float: right;
+}
+
+#transectChartD3Legend p {
+    margin: 5px;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+}
+
+.line {
+    fill: none;
+    stroke: steelblue;
+    stroke-width: 1.5px;
+}
+
+.tick line {
+    opacity: 0.1;
+    stroke-width: 1px;
+}

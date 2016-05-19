@@ -28,7 +28,8 @@ angular.module("explorer.feature.summary", ["geo.map"])
 	var DELAY = 400;
 	return {
 		restrict :"AE",
-		scope : true,		
+		scope : true,
+        template: '<div exp-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>',
 		link : function(scope, element) {
 			mapService.getMap().then(function(map) {
 				var timeout, control = L.control.features();

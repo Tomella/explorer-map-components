@@ -98,7 +98,6 @@ angular.module("geo.map", [])
 	
 	service.addMap = function(config) {
 		var map,
-			zoomControl,
 			legendControlOptions = null;
 		
 		if(!config.name) {
@@ -108,6 +107,7 @@ angular.module("geo.map", [])
 		lastMap = config.name;
 		
 		map = service.maps[config.name] = new L.Map(config.element, {center: config.options.center, zoom: config.options.zoom});
+        console.log("nzb " + config.noZoomBox);
 
 		if(config.layers) {
 			config.layers.forEach(function(layer) {
@@ -143,14 +143,15 @@ angular.module("geo.map", [])
 					return "Lng " + L.Util.formatNum(lng, 5) + "°";
 				}
 		}).addTo(map);
-		zoomControl = L.control.zoomBox({
-		    //modal: true,  // If false (default), it deactivates after each use.  
-		                  // If true, zoomBox control stays active until you click on the control to deactivate.
-		    // position: "topleft",                  
-		    // className: "customClass"  // Class to use to provide icon instead of Font Awesome
-		});
-		map.addControl(zoomControl);
-		
+        if (!config.noZoomBox) {
+            map.addControl(L.control.zoomBox({
+                //modal: true,  // If false (default), it deactivates after each use.
+                // If true, zoomBox control stays active until you click on the control to deactivate.
+                // position: "topleft",
+                // className: "customClass"  // Class to use to provide icon instead of Font Awesome
+            }));
+        }
+
 		//L.control.zoomout().addTo(map);
 		
 		

@@ -9,6 +9,7 @@ if(!Exp.Util) {
 	Exp.Util = {};
 }
 
+Exp.Util.toGeoJSONFeature = toGeoJSONFeature;
 Exp.Util.toLineStringWkt = toLineStringWkt;
 Exp.Util.intersects = intersects;
 Exp.Util.boundsToWktPoly = boundsToWktPoly;
@@ -215,6 +216,23 @@ function toLineStringWkt(latlngs) {
     	});
     }
     return "LINESTRING(" + coords.join(",") + ")";
+}
+
+function toGeoJSONFeature(latlngs) {
+    var lng, lat, coords = [];
+    if(latlngs) {
+        latlngs.forEach(function(latlng) {
+            coords.push([latlng.lng, latlng.lat]);
+        });
+    }
+    return {
+        type: "Feature",
+        properties: {prop0: "value0"},
+        geometry: {
+            type: "LineString",
+            coordinates: coords
+        }
+    };
 }
 
 // Plugged in from
@@ -1069,6 +1087,473 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 }]);
 
 })(angular);
+(function(angular, $, d3) {
+
+'use strict';
+
+angular.module('geo.chart.transect', ['geo.transect'])
+
+.directive('chartTransect', [function() {
+    return {
+        templateUrl : 'map/chartTransect/chartTransect.html',
+        controller : 'transectChartController'
+    };
+}])
+
+.controller('transectChartController', ['$rootScope', '$scope', 'chartState', 'transectChartService',
+        function($rootScope, $scope, chartState, transectChartService) {
+
+        $scope.chartState = chartState;
+        $scope.transectChartService = transectChartService;
+
+        $rootScope.$on("transect.plot.data", function (event, entity) {
+
+            if (entity && entity.length && entity.positions && entity.positions.length > 1) {
+
+                $scope.positions = entity.positions;
+                transectChartService.drawChart(entity);
+            }
+            else {
+                $rootScope.$broadcast("chart.update", {
+                    targetChartId: ""
+                });
+            }
+        });
+}])
+
+.factory('transectChartService', [
+    '$rootScope',
+    '$q', '$timeout',
+    '$filter',
+    'httpData',
+    'chartState',
+    'crosshairService',
+    'mapHelper',
+    'mapPanelState',
+    'transectService',
+    'featureSummaryService',
+        function(
+            $rootScope,
+            $q, $timeout,
+            $filter,
+            httpData,
+            chartState,
+            crosshairService,
+            mapHelper,
+            mapPanelState,
+            transectService,
+            featureSummaryService
+        ) {
+
+        var chartMeta, metaKeys, service = {};
+        service.url = "resources/mock-service/explorer-cossap-services/service/path/transect-esri.json"; //""; // set by consumer
+        service.propertyColors = {};
+        service.targetData = undefined;
+        service.pathDistance = undefined;
+        service.faultTransected = false;
+
+        service.line = undefined;
+        service.entity = undefined;
+
+        service.hideChart = function(hide){
+            $rootScope.$broadcast("chart.update", {
+                targetChartId: false
+            });
+        };
+
+        /*
+
+        Convert esriJson geoms into geoJson to be plotted by chart
+
+        TODO - we are crudely tacking on the meta data from a mock file; this meta data
+        TODO - should be published and extracted from the service directly, when it's ready
+
+         */
+        function esriToGeoJsonReformat(){
+
+            var deferred = $q.defer();
+            var geoJsonOut = {
+                meta: {},
+                data: []
+            };
+
+            httpData.get(service.url).then(function(response) {
+
+                var features = response.data.features;
+                console.log("features "+ features.length);
+
+                httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect-esri-meta.json').then(function(response) {
+
+                    // tack on meta data to geojson
+                    geoJsonOut.meta = response.data.meta;
+
+                    // loop each feature, and append in expected geojson format
+                    for (var i = 0; (i < features.length); i++){
+
+                        // build properties key/values
+                        var properties = {}, geom = Terraformer.ArcGIS.parse(features[i].geometry);
+                        for (var property in geoJsonOut.meta){
+                            if(features[i].attributes[property]){
+                                if (property === "ELEVATION")
+                                    geom.push(features[i].attributes.ELEVATION);
+                                else
+                                    properties[property] = features[i].attributes[property];
+                            }
+                        }
+
+                        geoJsonOut.data.push({
+                            properties: properties,
+                            geometry: geom
+                        });
+                    }
+                    deferred.resolve(geoJsonOut);
+                });
+            });
+
+            return deferred.promise;
+        }
+
+        service.processGeometry = function() {
+            if (service.line) {
+                mapHelper.removeLayer(service.line);
+                service.line = undefined;
+                crosshairService.remove();
+                featureSummaryService.hidePopup();
+            }
+            if (service.entity && service.entity.positions) {
+                service.line = L.polyline(service.entity.positions, {color: 'black', weight:2, opacity:0.8});
+                mapHelper.addLayer(service.line);
+            }
+        };
+
+        service.cleanUpCallback = function() {
+            service.entity = undefined;
+            service.processGeometry();
+            document.getElementById("transectChartD3").innerHTML = "";
+        };
+
+        service.drawChart = function(entity){
+            if (!chartMeta) {
+                return httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect.json').then(function(response) {
+                    chartMeta = response.data.meta;
+                    service.drawChart(entity);
+                });
+            }
+
+            service.entity = entity;
+            service.processGeometry();
+
+            $rootScope.$broadcast("chart.update", {
+                targetChartId: "transectChart",
+                cleanUpCallback: service.cleanUpCallback
+            });
+
+            /*---------------------------------------- D3 -----------------------------------------*/
+            // adapted from: http://bl.ocks.org/mbostock/3884955
+
+            var mouseEventsActive = true;
+            var xAxisOffset = 70;
+            var margin = {top: 50, right: 20, bottom: 30, left: 50};
+
+            // min height 235
+            var height = ((document.body.clientHeight * 0.35 > 235) ? document.body.clientHeight * 0.35 : 235) - margin.top - margin.bottom;
+
+            // min width for chart is 1000 - legend width
+            var width = document.body.clientWidth - margin.left - margin.right - 275;
+            width = (width > 725) ? width : 725;
+
+            // min width for the whole panel is 1000
+            var minPanelWidth = width + 260 + margin.left + margin.right;
+            service.minPanelWidth = (minPanelWidth > 1000) ? minPanelWidth : 1000;
+
+            var x = d3.scale.linear()
+                .range([0, width]);
+
+            var y = d3.scale.linear()
+                .range([height, 0]);
+
+            var xAxis = d3.svg.axis()
+                .scale(x)
+                .orient("bottom")
+                .tickValues([0]);
+
+            var yAxis = d3.svg.axis()
+                .scale(y)
+                .orient("left")
+                .innerTickSize(-width)
+                .outerTickSize(10)
+                .tickPadding(10);
+
+            var line = d3.svg.line()
+
+                // smoothing?
+                //.interpolate("basis")
+
+                // cut out NO DATA values..?
+                .defined(function(d) { return d.z !== 0; })
+                .x(function(d) { return x(+d.x); })
+                .y(function(d) { return y(+d.z); });
+
+            var svg = d3.select("#transectChartD3").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .attr("class", "chart-svg")
+                .style("z-index", "2")
+                .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            service.properties = [];
+            var propertyNames = [];
+            var sortedXArray = [];
+            var propertiesMap = {};
+            var elevationShown = $q.defer();
+
+            // get our meta data
+            // init object for each defined property
+            angular.forEach(chartMeta, function(value, key) {
+                propertyNames.push(value.label);
+                if(key != "FAULT") {
+                    service.propertyColors[key] = value.color;
+                    service.properties.push(propertiesMap[key] = {
+                        name: key,
+                        color: value.color,
+                        label: value.label,
+                        description: value.description,
+                        values: []
+                    });
+                }
+                var ii = 1000 * service.properties.length;
+                transectService.getServiceData(key, entity.positions).then(function(response) {
+                    if (key === "ELEVATION") {
+                        showElevation(response.features);
+                        redrawLines();
+                        elevationShown.resolve(true);
+                        if(!$rootScope.$$phase) $rootScope.$apply();
+                    } else {
+                        elevationShown.promise.then(function() {
+                            if (key === "FAULT")
+                                showFaults(response.features);
+                            else {
+                                $timeout(function() {
+                                    showOther(key, response.features);
+                                    redrawLines();
+                                }, ii);
+                            }
+                            if(!$rootScope.$$phase) $rootScope.$apply();
+                        });
+                    }
+                });
+            });
+
+            function getX(v) { return v.x; }
+            function getZ(v) { return v.z; }
+
+            function redrawLines() {
+                // push the y range out 10% on top so we don't get data hanging outside our scale
+                y.domain([
+                    d3.min(service.properties, function(c) { return d3.min(c.values, getZ); }),
+                    d3.max(service.properties, function(c) { return d3.max(c.values, getZ); }) * 1.1
+                ]);
+                svg.selectAll(".y.axis").remove();
+                svg.append("g").attr("class", "y axis").call(yAxis);
+
+                svg.selectAll(".property").remove();
+
+                svg.selectAll(".property")
+                    .data(service.properties)
+                    .enter().append("g")
+                    .attr("class", "property")
+                    .append("path")
+                    .attr("class", "line")
+                    .attr("d", function(d) { return line(d.values); })
+                    .style("stroke", function(d) { return d.color; })
+                    .style("stroke-width", 4)
+                    .style("z-index", "2")
+                    .style("opacity", 0.6);
+            }
+
+            var elevdata = null;
+            function showElevation(features) {
+                elevdata = features;
+                var values = propertiesMap.ELEVATION.values;
+                var cartoArray = [];
+                for(var i = 0; i < features.length; i++){
+                    var coords = features[i].geometry.coordinates;
+                    values.push({
+                        x: coords[0],
+                        y: coords[1],
+                        z: coords[2]
+                    });
+
+                    // cartoArray to calc surface distance
+                    cartoArray.push(viewerUtilsService.cartographicFromDegrees(coords[0], coords[1], coords[2]));
+
+                    // for bisect lookup on mouseover
+                    sortedXArray.push(coords[0]);
+                }
+
+                sortedXArray = sortedXArray.sort();
+                service.pathDistance = viewerUtilsService.cartographicArrayToSurfaceDistance(cartoArray);
+                service.pathDistance = $filter('length')(service.pathDistance, true);
+                x.domain([d3.min(values, getX), d3.max(values, getX)]);
+
+                svg.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(xAxis);
+
+                // y label
+                svg.append("text")
+                    .attr("y", -30)
+                    .attr("x", 20)
+                    .attr("dy", ".71em")
+                    .style("text-anchor", "end")
+                    .text("Z (m)");
+
+                // x label
+                svg.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", height + 10)
+                    .attr("dy", ".71em")
+                    .style("text-anchor", "middle")
+                    .style("fill", "#000")
+                    .text("Path Distance: "+ service.pathDistance);
+
+                var vertical = d3.select("#transectChartD3")
+                    .append("div")
+                    .attr("class", "ng-hide")
+                    .style("position", "absolute")
+                    .style("z-index", "2")
+                    .style("width", "2px")
+                    .style("height", height+"px")
+                    .style("top", "50px")
+                    .style("bottom", "0px")
+                    .style("left", "20px")
+                    .style("margin-left", "-1px")
+                    .style("background", "#000");
+
+
+                d3.select("#transectChartD3")
+                    .append("div")
+                    .attr("class", "x-index")
+                    .style("left", x(x) + xAxisOffset +"px");
+
+                d3.select("#transectChartD3 .chart-svg")
+                    .on("mousemove", function(){
+
+                        if(!mouseEventsActive) return;
+
+                        // get pos
+                        d3.mousex = d3.mouse(this);
+                        d3.mousex = d3.mousex[0] + 20;
+
+                        // update y transect pos
+                        if(d3.mousex > xAxisOffset && d3.mousex < width + xAxisOffset){
+                            vertical.style("left", d3.mousex + "px" );
+                            vertical.attr("class", "ng-show vertical-transect");
+                        }
+                        else {
+                            vertical.attr("class", "ng-hide");
+                            return false;
+                        }
+
+                        // adjust for svg x offest
+                        d3.mousex = d3.mousex - xAxisOffset;
+
+                        // use invertedX value to find index in our lookup array
+                        var index = d3.bisectLeft(sortedXArray, x.invert(d3.mousex));
+//                        index = sortedXArray.length - index;
+                        var target = {};
+
+                        service.properties.forEach(function(property){
+                            target[property.name] = property.values[index];
+                        });
+
+                        var position = {
+                            markerLonLat : L.latlng([target.ELEVATION.x, target.ELEVATION.y]),
+                            point:target.ELEVATION
+                        };
+                        crosshairService.move(position);
+                        featureSummaryService.getAndShowFeatures(position);
+                        service.targetData = target;
+
+                        if(!$rootScope.$$phase) {
+                            $rootScope.$apply();
+                        }
+
+                    })
+                    .on("mouseover", function() {
+
+                        if(!mouseEventsActive) return;
+
+                        // get pos
+                        d3.mousex = d3.mouse(this);
+                        d3.mousex = d3.mousex[0] + 20;
+
+                        // update y transect pos
+                        if (d3.mousex > xAxisOffset && d3.mousex < width + xAxisOffset) {
+                            vertical.style("left", d3.mousex + "px");
+                            vertical.attr("class", "ng-show vertical-transect");
+                        }
+                        else {
+                            vertical.attr("class", "ng-hide");
+                        }
+
+                    });
+
+                // pin chart for inspection
+                d3.select("#transectChartD3")
+
+                    .on("click", function() {
+
+                        // toggle mouseEvents
+                        mouseEventsActive = !mouseEventsActive;
+                        d3.select(".vertical-transect")
+                            .style("width", (mouseEventsActive ? 2 : 4)+"px")
+                            .style("margin-left", -(mouseEventsActive ? 1 : 2)+"px");
+
+                        // center target pos
+                        if(!mouseEventsActive){
+                            mapHelper.zoomToMarkPoints([[service.targetData.ELEVATION.x, service.targetData.ELEVATION.y]]);
+                        }
+                    });
+            }
+
+            function showFaults(features) {
+                var parent = d3.select("#transectChartD3");
+                for(var i = 0; i < features.length; i++){
+                    var coords = features[i].geometry.coordinates;
+                    if (coords[2] !== 0){
+                        parent.append("div")
+                            .attr("class", "fault-transect")
+                            .style("height", height+"px")
+                            .style("left", x(coords[0]) + xAxisOffset +"px");
+                    }
+                }
+            }
+
+            function showOther(key, features) {
+                features = elevdata;
+                var values = propertiesMap[key].values;
+                var z = Math.random() * 100;
+                for(var i = 0; i < features.length; i++){
+                    var coords = features[i].geometry.coordinates;
+                    values.push({
+                        x: coords[0],
+                        y: coords[1],
+                        z: z += (Math.random() * 10) - 5
+                    });
+                }
+            }
+
+            /*---------------------------------------- /D3 -----------------------------------------*/
+
+        };
+
+        return service;
+}]);
+
+})(angular, $, d3);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1637,6 +2122,230 @@ angular.module("geo.extent", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function (angular, L) {
+    'use strict';
+
+    angular.module("explorer.features", ['geo.maphelper', "explorer.httpdata"])
+
+        .directive('featureSummaryToggle', ['mapHelper', function (mapHelper) {
+            return {
+                template: '<i class="fa fa-location-arrow fa-rotate-180"></i>',
+                link: function(scope) {
+                    scope.$watch("unlinked", function(unlinked) {
+                        mapHelper.fireEvent(unlinked.featureSummary? "featuresactivate": "featuresdeactivate");
+                    }, true);
+                }
+            };
+        }])
+
+        .directive('featureGridToggle', ['mapHelper', function (mapHelper) {
+            return {
+                template: '<i class="fa fa-th"></i>',
+                link: function(scope) {
+                    scope.$watch("unlinked", function(unlinked) {
+                        mapHelper.showGrid(unlinked.featureGrid);
+                    }, true);
+                }
+            };
+        }])
+
+        .directive("xmarsPointFeatures", ['httpData', function (httpData) {
+            var anchorLeftTopMap = {
+                "rx_gt_lx": {
+                    "by_gt_ty": "leftTop",
+                    "by_le_ty": "leftBottom"
+                },
+                "rx_le_lx": {
+                    "by_gt_ty": "rightTop",
+                    "by_le_ty": "rightBottom"
+                }
+            };
+
+            return {
+                templateUrl: "cesium/featuresSummary.html",
+                scope: {
+                    features: "="
+                },
+                link: function (scope, element) {
+                    var unregister = scope.$watch("features", function () {
+                        if (scope.features) {
+                            httpData.get("resources/config/mars_feature_icon_mapping.json", {cache: true}).then(function (response) {
+                                scope.mappings = response && response.data;
+                                unregister();
+                            });
+                        }
+                    });
+
+                    scope.featurePanelPosition = function () {
+                        if (!scope.features || !scope.features.data) {
+                            return {left: -300, top: -200};
+                        }
+                        var textElement = element.find(".marsfeatures")[0],
+                            textBox = {
+                                element: textElement,
+                                connectionPoint: null
+                            },
+                            x = scope.features.mousePos.x,
+                            y = scope.features.mousePos.y,
+                            box = scope.features.viewer.canvas,
+                            rightX = box.width - x,
+                            leftX = x,
+                            topY = y,
+                            bottomY = box.height - y,
+                            anchorLeft = rightX > leftX ? "rx_gt_lx" : "rx_le_lx",
+                            anchorTop = bottomY > topY ? "by_gt_ty" : "by_le_ty",
+                            bottomOffset = scope.features.maxExtent ? 20 : 140;
+
+                        // Let the object look after itself.
+                        textBox.connectionPoint = function () {
+                            var textBox = this.element.getBoundingClientRect(),
+                                top = anchorTop ? y + 10 : y - textBox.height - 10,
+                                left = anchorTop ? x + 10 : x - textBox.width - 10;
+                            if (top < 20) {
+                                top = 20;
+                            } else if ((y + textBox.height) > (box.height - bottomOffset)) {
+                                top = box.height - bottomOffset - textBox.height;
+                            }
+                            if (left < 20) {
+                                left = 20;
+                            } else if ((left + textBox.width) > (box.width - 20)) {
+                                left = box.width - 20 - textBox.width;
+                            }
+                            return {left: left, top: top + 80};
+                        };
+                        scope.features.popupClass = anchorLeftTopMap[anchorLeft][anchorTop];
+
+                        return textBox.connectionPoint();
+                    };
+                }
+            };
+        }])
+
+        .directive("xfeaturesUnderPoint", ['featuresService', function (featuresService) {
+            return {
+                restrict: "EA",
+                template: '<div mars-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>',
+                link: function (scope) {
+                    featuresService.setSummaryHandler(function (features) {
+                        scope.featuresUnderPoint = features;
+                    });
+                }
+            };
+        }])
+
+        .factory("featuresService", ['configService', 'viewerService', 'viewerUtilsService', '$timeout', '$rootScope', '$q', 'httpData', function (configService, viewerService, viewerUtilsService, $timeout, $rootScope, $q, httpData) {
+            var clientSessionId,
+                pixelRatio = window.devicePixelRatio || 1,
+                featureCountUnderPointUrl = "service/path/featureCount",
+                featureInfoUnderPointUrl = "service/path/featureInfo",
+                ignorePendingSummaryResponse = true, // when summary is hidden during pending ajax call
+                featuresHandler,
+                mouseHoverOff,
+                mouseMovedOff;
+
+            function getFeatures(viewer, carto, url) {
+                if (!carto) return $q.when(null);
+
+                var deferred = $q.defer(), extent = viewerUtilsService.getBounds(viewer);
+                httpData.post(url || featureCountUnderPointUrl, {
+                    clientSessionId: clientSessionId,
+                    x: Cesium.Math.toDegrees(carto.longitude),
+                    y: Cesium.Math.toDegrees(carto.latitude),
+                    width: viewer.canvas.width / pixelRatio,
+                    height: viewer.canvas.height / pixelRatio,
+                    extent: {
+                        left: extent.left,
+                        right: extent.right,
+                        top: extent.top,
+                        bottom: extent.bottom
+                    }})
+                    .then(function (response) {
+                        deferred.resolve(response && response.data);
+                    }, function () {
+                        deferred.resolve(null);
+                    });
+
+                return deferred.promise;
+            }
+
+            function hideSummary() {
+                ignorePendingSummaryResponse = true;
+                if (featuresHandler) featuresHandler();
+            }
+
+            function onMouseMove(event, data) {
+                showSummary(data);
+            }
+
+            function showSummary(data) {
+                if (!featuresHandler) return;
+                ignorePendingSummaryResponse = false;
+                getFeatures(data.viewer, data.cartographic).then(function (response) {
+                    if (!featuresHandler || ignorePendingSummaryResponse) return;
+                    var features = {
+                        data: response, count: 0, viewer: data.viewer, mousePos: data.mousePos
+                    };
+                    angular.forEach(features.data || [], function (item) {
+                        features.count += item;
+                    });
+                    featuresHandler(features);
+                });
+            }
+
+            return {
+                getDetailsAtCartesian: function(cartesian) {
+                    return viewerService.getViewer().then(function(viewer) {
+                        return getFeatures(viewer,
+                            Cesium.Ellipsoid.WGS84.cartesianToCartographic(cartesian),
+                            featureInfoUnderPointUrl
+                        );
+                    });
+                },
+
+                setSummaryHandler: function (handler) {
+                    configService.getConfig("clientSessionId").then(function (id) {
+                        clientSessionId = id;
+                        featuresHandler = handler;
+                    });
+                },
+
+                showSummaryAtCartesian: function(cartesian) {
+                    if (cartesian) {
+                        viewerService.getViewer().then(function(viewer) {
+                            showSummary({
+                                cartesian: cartesian,
+                                cartographic: Cesium.Ellipsoid.WGS84.cartesianToCartographic(cartesian),
+                                mousePos: Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian),
+                                viewer: viewer
+                            });
+                        });
+                    } else {
+                        hideSummary();
+                    }
+                },
+
+                trackMouseMove: function (enable) {
+                    viewerService.showGrid(enable);
+                    if (enable) {
+                        if (!mouseHoverOff) {
+                            mouseHoverOff = $rootScope.$on('viewer.mouse.hover', onMouseMove);
+                            mouseMovedOff = $rootScope.$on('viewer.mouse.moved', hideSummary);
+                        }
+                    } else {
+                        hideSummary();
+                        if (mouseHoverOff) {
+                            mouseHoverOff();
+                            mouseMovedOff();
+                            mouseHoverOff = mouseMovedOff = undefined;
+                        }
+                    }
+                }
+            };
+        }]);
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 (function(angular, context) {
 'use strict';
 
@@ -1664,7 +2373,8 @@ angular.module("explorer.feature.summary", ["geo.map"])
 	var DELAY = 400;
 	return {
 		restrict :"AE",
-		scope : true,		
+		scope : true,
+        template: '<div exp-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>',
 		link : function(scope, element) {
 			mapService.getMap().then(function(map) {
 				var timeout, control = L.control.features();
@@ -2150,6 +2860,41 @@ angular.module('explorer.layers', ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(angular) {	
+
+'use strict';
+
+angular.module('explorer.layer.inpector', ['explorer.layers'])
+
+.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
+	return {
+		restrict:"AE",
+		scope:{
+			click : "&",
+			showClose : "=?",
+			active:"=",
+			name:"=?"
+		},
+		controller : ['$scope', function($scope){
+			$scope.toggleShow = function() {
+				var active = this.active;
+				if(!active.isWrapped) {
+					active = layerService.decorate(active);
+					active.init();
+					active.show = true;
+					active.showExtra = true;
+				}
+				active.displayed = active.handleShow();
+			};
+		}],		
+		templateUrl : "map/layerinspector/layerInspector.html"
+	};
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 (function(angular) {
 'use strict';
 
@@ -2192,41 +2937,6 @@ angular.module("explorer.layer.slider", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular) {	
-
-'use strict';
-
-angular.module('explorer.layer.inpector', ['explorer.layers'])
-
-.directive('layerInspector', ['$rootScope', 'layerService', function($rootScope, layerService) {
-	return {
-		restrict:"AE",
-		scope:{
-			click : "&",
-			showClose : "=?",
-			active:"=",
-			name:"=?"
-		},
-		controller : ['$scope', function($scope){
-			$scope.toggleShow = function() {
-				var active = this.active;
-				if(!active.isWrapped) {
-					active = layerService.decorate(active);
-					active.init();
-					active.show = true;
-					active.showExtra = true;
-				}
-				active.displayed = active.handleShow();
-			};
-		}],		
-		templateUrl : "map/layerinspector/layerInspector.html"
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 
 (function (angular, window, L) {
 
@@ -2235,20 +2945,51 @@ angular.module('explorer.layer.inpector', ['explorer.layers'])
 
 angular.module('geo.maphelper', ['geo.map'])
 
-.factory("mapHelper", ["mapService",  "$timeout", "$q", "$rootScope", "flashService", 
-                       function(mapService,  $timeout, $q, $rootScope, flashService){
+.factory("mapHelper", ["mapService", "$timeout", "$q", "$rootScope", "flashService",
+                       function(mapService, $timeout, $q, $rootScope, flashService){
+
 	var  helper = { 
 		timeoutPeriod: 200, 
 		timeout : null,
 		callbacks:{}, 
-		checkMarkers:function(){}, 
+		checkMarkers:function(){},
 		zoomToMarkPoints:function(results, marker){
+            console.log("zooming to  " + results[0]);
 			mapService.getMap().then(function(map) {
+                console.log("really zooming to  " + results[0]);
 				map.setView(results[0], 12, {animate:true});
 			});
 		}, 
 		zoomToLonLats:function(mapService){},
-		markPoint:function(mapService){},
+        zoomToBounds:function(bounds){
+            mapService.getMap().then(function(map) {
+                map.setView(results[0], 12, {animate:true});
+            });
+        },
+        zoomOut:function(factor){
+            mapService.getMap().then(function(map) {
+                map.zoomOut(factor);
+            });
+        },
+        addLayer:function(layer) {
+            mapService.getMap().then(function(map) {
+                layer.addTo(map);
+            });
+        },
+        removeLayer:function(layer) {
+            mapService.getMap().then(function(map) {
+                map.removeLayer(layer);
+            });
+        },
+        fireEvent:function(name, event) {
+            mapService.getMap().then(function(map) {
+                map.fireEvent(name, event);
+            });
+        },
+        showGrid:function(show) {
+            /// TODO
+        },
+        markPoint:function(mapService){},
 		getPseudoBaseLayer:function(){
 			return mapService.getMap().then(function(map) {
 				var response = null;
@@ -2292,33 +3033,6 @@ angular.module('geo.maphelper', ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-
-(function(angular){
-'use strict';
-
-angular.module("geo.measure", [])
-
-.directive("geoMeasure", ['$log', function($log) {
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		link : function(scope, element, attrs, ctrl) {
-			ctrl.getMap().then(function(map) {
-				L.Control.measureControl().addTo(map);
-				// TODO. See if it is useful
-				map.on("draw:drawstop", function(data) {
-					$log.info("Draw stopped");
-					$log.info(data);
-				});
-			});
-		}
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular) {
 'use strict';
 
@@ -2346,6 +3060,33 @@ angular.module("explorer.mapstate", [])
 				if(state) {
 					mapService.setState(state);
 				}
+			});
+		}
+	};
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular){
+'use strict';
+
+angular.module("geo.measure", [])
+
+.directive("geoMeasure", ['$log', function($log) {
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		link : function(scope, element, attrs, ctrl) {
+			ctrl.getMap().then(function(map) {
+				L.Control.measureControl().addTo(map);
+				// TODO. See if it is useful
+				map.on("draw:drawstop", function(data) {
+					$log.info("Draw stopped");
+					$log.info(data);
+				});
 			});
 		}
 	};
@@ -3307,6 +4048,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 
 .directive("expClickMapPoint", ['pointService', function(pointService) {
 	return {
+        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
 		restrict:'AE',
 		scope : {
 		},		
@@ -3761,6 +4503,225 @@ function OverFeatureCtrl($filter, pointService) {
 })(angular, L, window);
 
 /*!
+ * Copyright 2016 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+/**
+ * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
+ */
+(function (angular, Exp) {
+    'use strict';
+
+    function TerrainLoader(options) {
+        options = options || {};
+
+        this.load = function(url, onload, onerror) {
+            var request = new XMLHttpRequest();
+
+            request.addEventListener( 'load', function ( event ) {
+                var parser = new GeotiffParser();
+                parser.parseHeader(event.target.response);
+                onload(parser.loadPixels());
+            }, false );
+
+
+            if ( onerror !== undefined ) {
+                request.addEventListener( 'error', function ( event ) {
+                    onerror( event );
+                }, false );
+            }
+
+            if ( options.crossOrigin !== undefined ) {
+                request.crossOrigin = options.crossOrigin;
+            }
+
+            request.open( 'GET', url, true );
+            request.responseType = 'arraybuffer';
+            request.send( null );
+        };
+
+        this.setCrossOrigin = function( value ) {
+            options.crossOrigin = value;
+        };
+    }
+
+    angular.module("geo.transect", ['explorer.config','explorer.feature.summary','explorer.flasher'])
+
+        .provider("transectService", function() {
+            var diagonal = 500,
+                layers = {},
+                ptElevationUrl,
+                waterTableUrl = "service/path/waterTable",
+                artesianBasinKmlUrl = "service/artesianBasin/geometry/kml",
+                intersectUrl = "service/artesianBasin/intersects",
+                extent = {
+                    lngMin: 112.99986111100009,
+                    lngMax: 153.999861113351,
+                    latMin: -44.0001389004617,
+                    latMax: -10.00013890099995
+                };
+
+            this.extent = function(newExtent) {
+                extent.lngMin = angular.isUndefined(newExtent.lngMin)? extent.lngMin: newExtent.lngMin;
+                extent.lngMax = angular.isUndefined(newExtent.lngMax)? extent.lngMax: newExtent.lngMax;
+                extent.latMin = angular.isUndefined(newExtent.latMin)? extent.latMin: newExtent.latMin;
+                extent.latMax = angular.isUndefined(newExtent.latMax)? extent.latMax: newExtent.latMax;
+            };
+
+            this.setIntersectUrl = function (url) {
+                intersectUrl = url;
+            };
+
+            this.setKmlUrl = function (url) {
+                artesianBasinKmlUrl = url;
+            };
+
+            this.setServiceUrl = function(name, url) {
+                name = name.toLowerCase();
+                layers[name] = {
+                    urlTemplate: url
+                };
+                if (name === "elevation") ptElevationUrl = url.replace(/{height}|{width}/g,"1");
+            };
+
+            this.setWaterTableUrl = function (url) {
+                waterTableUrl = url;
+            };
+
+            function calcSides(diagonal, ar) {
+                // x * x + ar * ar * x * x = diagonal * diagonal
+                // (1 + ar * ar) * x * x = diagonal * diagonal
+                // x * x = diagonal * diagonal / (1 + ar * ar)
+                var y = Math.sqrt(diagonal * diagonal / (1 + ar * ar));
+                return {y: Math.ceil(y), x: Math.ceil(y * ar)};
+            }
+
+            this.$get = ['$q', 'httpData', 'flashService', function ($q, httpData, flashService) {
+
+                return {
+                    getElevation: function (geometry, buffer) {
+                        return this.getServiceData("elevation", geometry, buffer);
+                    },
+
+                    getServiceData: function (name, geometry, buffer) {
+                        var flasher = flashService.add("Retrieving " + name + " details...", 8000),
+                            feature = Exp.Util.toGeoJSONFeature(geometry),
+                            bbox = turf.extent(feature),
+                            response  = {
+                                type: "FeatureCollection",
+                                features: []
+                            },
+                            lngMin = bbox[0],
+                            latMin = bbox[1],
+                            lngMax = bbox[2],
+                            latMax = bbox[3];
+
+                        // Sanity check for service url
+                        name = name.toLowerCase();
+                        var svcUrl = layers[name] && layers[name].urlTemplate;
+                        if (!svcUrl) return $q.when(response);
+
+                        // Sanity check for coordinates
+                        lngMax = lngMax > lngMin?lngMax:lngMin + 0.0001;
+                        latMax = latMax > latMin?latMax:latMin + 0.0001;
+                        var dx = lngMax - lngMin, dy = latMax - latMin;
+                        if (!buffer) buffer = 0;
+                        latMin = latMin - (buffer * dy);
+                        latMax = latMax + (buffer * dy);
+                        lngMin = lngMin - (buffer * dx);
+                        lngMax = lngMax + (buffer * dx);
+
+                        var xy = calcSides(diagonal, dx/dy),
+                            kiloms = turf.lineDistance(feature, "kilometers"),
+                            terrainLoader = new TerrainLoader(),
+                            deferred = $q.defer();
+                        svcUrl = svcUrl.replace("{bbox}", lngMin + "," + latMin + "," + lngMax + "," + latMax)
+                            .replace(/{width}/g, ""+Math.ceil(xy.x)).replace(/{height}/g, ""+Math.ceil(xy.y));
+                        terrainLoader.load(svcUrl, function(loaded) {
+//                            console.log("width: " + xy.x + ", height: " + xy.y + "calculated cells = " + (xy.x * xy.y) + " loaded length = " + loaded.length);
+
+                            var delta = kiloms / (diagonal - 1);
+                            for (var i = 0; i < diagonal; i++) {
+                                var deltaFeature = turf.along(feature, i * delta, "kilometers");
+                                deltaFeature.geometry.coordinates.push(toHeight(deltaFeature.geometry.coordinates));
+                                response.features.push(deltaFeature);
+                            }
+                            deferred.resolve(response);
+
+                            function toHeight(coord) {
+                                var x = coord[0], y = coord[1], zeroX = lngMin, zeroY = latMax,
+                                    cellY = Math.round((zeroY - y) / dy * (xy.y - 1)),
+                                    cellX = Math.round((x - zeroX) / dx * (xy.x - 1)),
+                                    index = cellY * xy.x + cellX;
+                                // console.log("Cell x = " + cellX + ", y = " + cellY + " Index = " + index + ", value = " + loaded[index]);
+                                return loaded[index];
+                            }
+                        });
+
+                        return deferred.promise;
+                    },
+
+                    getElevationAtPoint: function (cartographic) {
+                        var lng = Cesium.Math.toDegrees(cartographic.longitude),
+                            lat = Cesium.Math.toDegrees(cartographic.latitude);
+                        if (lat < extent.latMin || lat > extent.latMax || lng < extent.lngMin || lng > extent.lngMax)
+                            return $q.when(null);
+
+                        var bbox = [
+                            lng - 0.000001,
+                            lat - 0.000001,
+                            lng + 0.000001,
+                            lat + 0.000001
+                        ];
+                        var deferred = $q.defer();
+                        new TerrainLoader().load(ptElevationUrl.replace("{bbox}", bbox.join(",")), function(elev) {
+                            deferred.resolve(elev);
+                        });
+                        return deferred.promise;
+                    },
+
+                    intersectsWaterTable: function (geometry) {
+                        var url = intersectUrl + (intersectUrl.indexOf("?") > -1 ? "" : "?wkt=");
+                        return httpData.get(url + Exp.Util.toLineStringWkt(geometry), {cache: true}).then(function (response) {
+                            return response.data.intersects;
+                        });
+                    },
+
+                    loadWaterTableDS: function () {
+                        var deferred = $q.defer();
+                        Cesium.KmlDataSource.load(httpData.fixUrl(artesianBasinKmlUrl)).then(function(ds) {
+                            ds.entities.values.forEach(function(e) {
+                                if (e.polygon) {
+                                    e.polygon.material = new Cesium.GridMaterialProperty({
+                                        color: Cesium.Color.BLUE.withAlpha(0.3),
+                                        lineCount: new Cesium.Cartesian2(24, 24)
+                                    });
+                                    e.polygon.stRotation = 0.785398163;
+                                    e.polygon.outline = true;
+                                    e.polygon.outlineWidth = 8;
+                                    e.polygon.outlineColor = Cesium.Color.BLUE;
+                                }
+                            });
+                            deferred.resolve(ds);
+                        });
+                        return deferred.promise;
+                    },
+
+                    getWaterTable: function (geometry, distance) {
+                        var flasher = flashService.add("Retrieving water table details...", 8000),
+                            wktStr = Exp.Util.toLineStringWkt(geometry);
+
+                        return httpData.post(waterTableUrl, {wkt: wktStr, count: diagonal, distance: distance}).then(function (response) {
+                            flashService.remove(flasher);
+                            return response.data;
+                        });
+                    }
+                };
+
+            }];
+        });
+
+})(angular, Exp);
+/*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
 
@@ -4018,6 +4979,54 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
+L.Control.MousePosition = L.Control.extend({
+  options: {
+    position: 'bottomleft',
+    separator: ' : ',
+    emptyString: 'Unavailable',
+    lngFirst: false,
+    numDigits: 5,
+    lngFormatter: undefined,
+    latFormatter: undefined,
+    prefix: ""
+  },
+
+  onAdd: function (map) {
+    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+    L.DomEvent.disableClickPropagation(this._container);
+    map.on('mousemove', this._onMouseMove, this);
+    this._container.innerHTML=this.options.emptyString;
+    return this._container;
+  },
+
+  onRemove: function (map) {
+    map.off('mousemove', this._onMouseMove);
+  },
+
+  _onMouseMove: function (e) {
+    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
+    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
+    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    var prefixAndValue = this.options.prefix + ' ' + value;
+    this._container.innerHTML = prefixAndValue;
+  }
+
+});
+
+L.Map.mergeOptions({
+    positionControl: false
+});
+
+L.Map.addInitHook(function () {
+    if (this.options.positionControl) {
+        this.positionControl = new L.Control.MousePosition();
+        this.addControl(this.positionControl);
+    }
+});
+
+L.control.mousePosition = function (options) {
+    return new L.Control.MousePosition(options);
+};
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -4106,54 +5115,6 @@ L.control.legend = function (options) {
 	
 })(L);
 
-L.Control.MousePosition = L.Control.extend({
-  options: {
-    position: 'bottomleft',
-    separator: ' : ',
-    emptyString: 'Unavailable',
-    lngFirst: false,
-    numDigits: 5,
-    lngFormatter: undefined,
-    latFormatter: undefined,
-    prefix: ""
-  },
-
-  onAdd: function (map) {
-    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
-    L.DomEvent.disableClickPropagation(this._container);
-    map.on('mousemove', this._onMouseMove, this);
-    this._container.innerHTML=this.options.emptyString;
-    return this._container;
-  },
-
-  onRemove: function (map) {
-    map.off('mousemove', this._onMouseMove);
-  },
-
-  _onMouseMove: function (e) {
-    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
-    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
-    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    var prefixAndValue = this.options.prefix + ' ' + value;
-    this._container.innerHTML = prefixAndValue;
-  }
-
-});
-
-L.Map.mergeOptions({
-    positionControl: false
-});
-
-L.Map.addInitHook(function () {
-    if (this.options.positionControl) {
-        this.positionControl = new L.Control.MousePosition();
-        this.addControl(this.positionControl);
-    }
-});
-
-L.control.mousePosition = function (options) {
-    return new L.Control.MousePosition(options);
-};
 L.Control.ZoomBox = L.Control.extend({
     _active: false,
     _map: null,
@@ -4436,7 +5397,6 @@ angular.module("geo.map", [])
 	
 	service.addMap = function(config) {
 		var map,
-			zoomControl,
 			legendControlOptions = null;
 		
 		if(!config.name) {
@@ -4446,6 +5406,7 @@ angular.module("geo.map", [])
 		lastMap = config.name;
 		
 		map = service.maps[config.name] = new L.Map(config.element, {center: config.options.center, zoom: config.options.zoom});
+        console.log("nzb " + config.noZoomBox);
 
 		if(config.layers) {
 			config.layers.forEach(function(layer) {
@@ -4481,14 +5442,15 @@ angular.module("geo.map", [])
 					return "Lng " + L.Util.formatNum(lng, 5) + "°";
 				}
 		}).addTo(map);
-		zoomControl = L.control.zoomBox({
-		    //modal: true,  // If false (default), it deactivates after each use.  
-		                  // If true, zoomBox control stays active until you click on the control to deactivate.
-		    // position: "topleft",                  
-		    // className: "customClass"  // Class to use to provide icon instead of Font Awesome
-		});
-		map.addControl(zoomControl);
-		
+        if (!config.noZoomBox) {
+            map.addControl(L.control.zoomBox({
+                //modal: true,  // If false (default), it deactivates after each use.
+                // If true, zoomBox control stays active until you click on the control to deactivate.
+                // position: "topleft",
+                // className: "customClass"  // Class to use to provide icon instead of Font Awesome
+            }));
+        }
+
 		//L.control.zoomout().addTo(map);
 		
 		
@@ -4547,6 +5509,7 @@ angular.module("geo.map", [])
 
 })(angular, L, window);
 angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\r\n	<span id=\"baselayerCtrl\">\r\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\r\n	</span>\r\n</span>");
+$templateCache.put("map/chartTransect/chartTransect.html","<div id=\"transectChart\" ng-style=\"{ \'width\': transectChartService.minPanelWidth }\" ng-show=\"chartState.targetChartId == \'transectChart\'\">\r\n\r\n	<div ng-show=\"transectChartService.faultTransected\"\r\n		 class=\"fault-legend danger-pulse\" ng-class=\"{\'danger-pulse\': transectChartService.faultTransected}\"\r\n		 tooltip=\"Faults are not ideal for CCS..\"\r\n		 tooltip-placement=\"left\">\r\n		<span class=\"fault-legend-color\"></span>\r\n		<strong> Known Faults Transected <i class=\"fa fa-exclamation-triangle\"></i></strong>\r\n	</div>\r\n\r\n	<div id=\"transectChartD3Legend\" class=\"clear-float\">\r\n\r\n		<div class=\"btn-group\" style=\"float: right; margin: -10px 0px 20px 0px\">\r\n			<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\"\r\n					ng-click=\"showInfo = !showInfo\">\r\n				<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n			</button>\r\n\r\n			<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"transectChartService.hideChart()\">\r\n				<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n			</button>\r\n		</div>\r\n\r\n		<div ng-repeat=\"property in transectChartService.properties\" class=\"clear-float\" tooltip=\"{{property.description}}\" tooltip-placement=\"left\">\r\n			<p>\r\n				<span ng-style=\"{ \'background\': property.color }\" class=\"rect\"></span>\r\n				<strong>{{ property.label }} Z (m) </strong>\r\n				<code ng-if=\"transectChartService.targetData && transectChartService.targetData[property.name]\"> {{ transectChartService.targetData[property.name].z | number: 3}}</code>\r\n				<code ng-if=\"!transectChartService.targetData || !transectChartService.targetData[property.name]\"> -- </code>\r\n			</p>\r\n		</div>\r\n\r\n		<div class=\"clear-float\">\r\n			<p tooltip=\"Closest x value to you cursor\'s position\" tooltip-placement=\"left\">\r\n				<strong>X</strong>\r\n				<code ng-if=\"transectChartService.targetData\">{{transectChartService.targetData.x | number: 3}}</code>\r\n				<code ng-if=\"!transectChartService.targetData\"> -- </code>\r\n			</p>\r\n			<p tooltip=\"Closest y value to you cursor\'s position\" tooltip-placement=\"left\">\r\n				<strong>Y</strong>\r\n				<code ng-if=\"transectChartService.targetData\">{{transectChartService.targetData.y | number: 3}}</code>\r\n				<code ng-if=\"!transectChartService.targetData\"> -- </code>\r\n			</p>\r\n		</div>\r\n\r\n	</div>\r\n\r\n	<div id=\"transectChartD3\"></div>\r\n\r\n</div>");
 $templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\r\n	<div class=\"row\">\r\n		<div class=\"col-md-4\">\r\n			<span class=\"graph-brand\">Path Elevation</span>\r\n		</div>	\r\n		<div class=\"col-md-8\">\r\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\r\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\r\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \r\n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\r\n				</div>	\r\n				<div class=\"btn-group\">	\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \r\n							ng-click=\"showInfo = !showInfo\">\r\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>\r\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" show-close=\"true\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\r\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>				\r\n				</div>\r\n			</div>\r\n		</div>	\r\n	</div>\r\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\r\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\r\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\r\n	<div class=\"elevationHoverPanel\" mars-point-info ng-show=\"position\"\r\n		ng-attr-style=\"top:{{position.pageY - 70}}px;left:{{position.pageX * 0.94 - 10}}px;\">\r\n		<div class=\"ng-binding\"><strong>Elev.:</strong>{{position.point.z|number:0}}m</div>\r\n		<div class=\"ng-binding\"><strong>Dist.:</strong>{{length * position.percentX * 0.01|length : true }}</div>\r\n	</div>\r\n	</div>\r\n</div>");
 $templateCache.put("map/elevation/elevationInfo.html","<div>\r\nThe elevation graph is calculated from the 3\" DEM data. \r\nThe data is held in a grid with a cell size of approx. 90 m. \r\nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \r\n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\r\n<br/>\r\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \r\nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \r\nwater table appear above the elevation of the surface on occasions. \r\nData availability will be indicated by the button labelled \"Show Water Table\". \r\n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\r\n</div>\r\n");
 $templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\r\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\r\n		<div class=\"pathContent\">\r\n			<div ng-repeat=\"(key, feature) in features.data\">\r\n				{{mappings[key].title}}  ({{feature}})\r\n			</div>\r\n			<div ng-hide=\"features.count\">No nearby features</div>\r\n		</div>\r\n	</div>\r\n</div>\r\n");

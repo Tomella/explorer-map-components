@@ -63,4 +63,3 @@ function prepareTemplates() {
    return gulp.src('source/map/**/*.html')
       .pipe(templateCache({root:"map", module:"explorer.map.templates", standalone : true}));
 }
-
