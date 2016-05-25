@@ -263,7 +263,7 @@ angular.module("geo.elevation", [
 		waterTableUrl = url;
 	};
 	
-	this.$get = ['$log', '$http', '$q', 'mapService', 'flashService', function($log, $http, $q, mapService, flashService) {
+	this.$get = ['$log', 'httpData', '$q', 'mapService', 'flashService', function($log, httpData, $q, mapService, flashService) {
 
 		// We are safe doing this as it can't be triggered until the map is drawn anyway.
 		mapService.getMap().then(function(olMap) {map = olMap;});
@@ -281,7 +281,7 @@ angular.module("geo.elevation", [
 				var flasher = flashService.add("Retrieving elevation details...", 8000),
 					wktStr = Exp.Util.toLineStringWkt(geometry);
 
-				return $http.post(elevationUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
+				return httpData.post(elevationUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
 					flashService.remove(flasher);
 					return response.data;
 				});	
@@ -289,7 +289,7 @@ angular.module("geo.elevation", [
 	
 			intersectsWaterTable :function(geometry) {
 				var url = intersectUrl + (intersectUrl.indexOf("?") > -1?"":"?wkt=");
-				return $http.get(url + Exp.Util.toLineStringWkt(geometry), {cache:true}).then(function(response) {
+				return httpData.get(url + Exp.Util.toLineStringWkt(geometry), {cache:true}).then(function(response) {
 					return response.data.intersects;
 				});
 			},
@@ -335,14 +335,14 @@ angular.module("geo.elevation", [
 				var flasher = flashService.add("Retrieving water table details...", 8000),
 					wktStr = Exp.Util.toLineStringWkt(geometry);
 
-				return $http.post(waterTableUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
+				return httpData.post(waterTableUrl, {wkt:wktStr, count:pointCount, distance:distance}).then(function(response) {
 					flashService.remove(flasher);
 					return response.data;
 				});
 			},
 	
 			getInfoText : function() {
-				return $http("map/elevation/elevationInfo.html", {cache : true}).then(function(response) {
+				return httpData.get("map/elevation/elevationInfo.html", {cache : true}).then(function(response) {
 					return response.data;
 				});
 			},
