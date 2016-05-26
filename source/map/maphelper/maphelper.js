@@ -11,23 +11,30 @@ angular.module('geo.maphelper', ['geo.map'])
 
 .factory("mapHelper", ["mapService", "$timeout", "$q", "$rootScope", "flashService",
                        function(mapService, $timeout, $q, $rootScope, flashService){
+    var homeBounds = [[-47, 107],[-9, 156]];
+    mapService.getMap().then(function(map) {
+        homeBounds = map.getBounds();
+    });
 
-	var  helper = { 
-		timeoutPeriod: 200, 
+	var  helper = {
+		timeoutPeriod: 200,
 		timeout : null,
 		callbacks:{}, 
 		checkMarkers:function(){},
 		zoomToMarkPoints:function(results, marker){
-            console.log("zooming to  " + results[0]);
 			mapService.getMap().then(function(map) {
-                console.log("really zooming to  " + results[0]);
 				map.setView(results[0], 12, {animate:true});
 			});
 		}, 
 		zoomToLonLats:function(mapService){},
         zoomToBounds:function(bounds){
             mapService.getMap().then(function(map) {
-                map.setView(results[0], 12, {animate:true});
+                map.fitBounds(bounds, {animate:true});
+            });
+        },
+        takeMeHomeCountryRoads:function(){
+            mapService.getMap().then(function(map) {
+                map.fitBounds(homeBounds, {animate:true});
             });
         },
         zoomOut:function(factor){
@@ -64,7 +71,6 @@ angular.module('geo.maphelper', ['geo.map'])
 				});
 				return response;
 			});
-			
 		},
 		subscribe:function(name, func)	{	
 			if (!this.callbacks[name]) this.callbacks[name]={ subscribers:[] };
@@ -80,13 +86,12 @@ angular.module('geo.maphelper', ['geo.map'])
 	};
 	
 	mapService.getMap().then(function(map) {
-		map.on("moveend", handleChange);
-		function handleChange(event) {
+		map.on("moveend", function(event) {
 			$timeout.cancel(helper.timeout);
 			helper.timeout = $timeout(function() {
 				$rootScope.$broadcast("extentOfInterestChanged", map);
 			}, helper.timoutPeriod);
-		}
+		});
 	});
 	
 	

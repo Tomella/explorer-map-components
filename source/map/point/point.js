@@ -57,13 +57,12 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 			}
 		}],
 		link : function(scope, element) {
-			console.log("Id = ", scope.$id);
 			// This things is a one shot wonder so we listen for an event.
 			$rootScope.$on("map.point.changed", function(event, point) {
 				scope.point = point;
 				pointService.removeLayer();
-				if(typeof point != "undefined" && point) {
-					scope.changePoint(point);
+                scope.changePoint(point);
+				if(point) {
 					pointService.getMetaData().then(function(response) {
 						scope.metadata = response.data;
 					});
@@ -184,7 +183,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 	};
 }])
 
-.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
+.factory("pointService", ['httpData', '$q', 'configService', 'mapService', '$rootScope', function(httpData, $q, configService, mapService, $rootScope){
 	var featuresUnderPointUrl = "service/path/featureInfo",
 		layer = null,
 		control = null,
@@ -228,11 +227,11 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 				type: "rings"
 			}
 		},
-		metaDataUrl = "map/point/pointMetadata.json",
+		metaDataUrl = httpData.baseUrlForPkg('ga-explorer-map') + 'resources/point/pointMetadata.json',
 		marker = null,
 		clickControl = null,
 		clickListeners = [];
-	
+
 	return {
 		triggerElevationPlot : function(geometry, label) {
 			var distance = geometry.getLength();
@@ -274,7 +273,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 		},
 		
 		getMetaData : function() {
-			return $http.get(metaDataUrl, {cache:true});
+			return httpData.get(metaDataUrl, {cache:true});
 		},
 		
 		moveMarker : function(point) {
@@ -284,7 +283,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 				if(marker) {
 					map.removeLayer(marker);
 				}
-				marker = L.marker(point).addTo(map);
+				marker = point? L.marker(point).addTo(map): null;
 			});
 			
 		},
@@ -317,7 +316,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 					extent = map.getBounds();
 
 				return configService.getConfig("clientSessionId").then(function(id) {			
-					return $http.post(featuresUnderPointUrl, {
+					return httpData.post(featuresUnderPointUrl, {
 							clientSessionId : id,
 							x:point.x, 
 							y:point.y, 
@@ -447,16 +446,13 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
 function OverFeatureCtrl($filter, pointService) {
 	this.click = function() {
-		console.log("Click");
 	};
 
 	this.mouseenter = function(feature) {
-		console.log("enter");
 		pointService.overFeatures(feature.feature);
 	};
 	
 	this.mouseleave = function(feature) {
-		console.log("leave");
 		pointService.outFeatures(feature.feature);
 	};
 	

@@ -91,7 +91,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
             httpData.get(service.url).then(function(response) {
 
                 var features = response.data.features;
-                console.log("features "+ features.length);
 
                 httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect-esri-meta.json').then(function(response) {
 
