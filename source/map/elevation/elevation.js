@@ -318,7 +318,7 @@ angular.module("geo.elevation", [
 		
 			createWaterTableLayer : function() {
 				return mapService.getMap().then(function(map) {
-					var kml = new L.KML(artesianBasinKmlUrl, {async: true});
+					var kml = new L.KML(httpData.fixUrl(artesianBasinKmlUrl), {async: true});
 				
 					return kml.on("loaded", function(e) {
 						waterTableLayer = e.target;
