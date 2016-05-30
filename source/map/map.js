@@ -46,6 +46,7 @@ angular.module("geo.map", [])
 		lastMap,
 		waiters,
 		layerControl,
+        gridLayer,
 		groups = {},
 		service = {
 			maps: {}
@@ -95,9 +96,13 @@ angular.module("geo.map", [])
 			data.layer = null;
 		}
 	};
+
+    service.getGridLayer = function() {
+        return gridLayer;
+    };
 	
 	service.addMap = function(config) {
-		var map, gridLayer,
+		var map,
 			legendControlOptions = null;
 		
 		if(!config.name) {
@@ -114,7 +119,7 @@ angular.module("geo.map", [])
 
         if (config.gridLayer) {
             config.gridLayer.name = "Grid";
-            gridLayer = addLayer(config.gridLayer, map, map);
+            gridLayer = expandLayer(config.gridLayer);
         }
 
 		if(config.layers) {

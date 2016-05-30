@@ -1087,53 +1087,6 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 }]);
 
 })(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular, L) {
-
-'use strict';
-
-angular.module("explorer.crosshair", ['geo.map'])
-
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
-	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
-	});
-	
-	return {		
-		add : function(point) {
-            this.move(point);
-		},
-		
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null; 
-			}
-		},
-		
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
-
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
-}]);
-
-})(angular, L);
 (function(angular, $, d3) {
 
 'use strict';
@@ -1600,6 +1553,53 @@ angular.module('geo.chart.transect', ['geo.transect'])
 }]);
 
 })(angular, $, d3);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L) {
+
+'use strict';
+
+angular.module("explorer.crosshair", ['geo.map'])
+
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+	
+	mapService.getMap().then(function(olMap) { 
+		map = olMap; 
+	});
+	
+	return {		
+		add : function(point) {
+            this.move(point);
+		},
+		
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null; 
+			}
+		},
+		
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
+			});
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
+	};
+}]);
+
+})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2743,8 +2743,9 @@ angular.module('geo.maphelper', ['geo.map'])
 
 .factory("mapHelper", ["mapService", "$timeout", "$q", "$rootScope", "flashService",
                        function(mapService, $timeout, $q, $rootScope, flashService){
-    var homeBounds = [[-47, 107],[-9, 156]];
+    var gridLayer, homeBounds = [[-47, 107],[-9, 156]];
     mapService.getMap().then(function(map) {
+        gridLayer = mapService.getGridLayer();
         homeBounds = map.getBounds();
     });
 
@@ -2790,7 +2791,12 @@ angular.module('geo.maphelper', ['geo.map'])
             });
         },
         showGrid:function(show) {
-            /// TODO
+            if (gridLayer) mapService.getMap().then(function(map) {
+                if (show)
+                    gridLayer.addTo(map);
+                else
+                    map.removeLayer(gridLayer);
+            });
         },
         markPoint:function(mapService){},
 		getPseudoBaseLayer:function(){
@@ -5141,6 +5147,7 @@ angular.module("geo.map", [])
 		lastMap,
 		waiters,
 		layerControl,
+        gridLayer,
 		groups = {},
 		service = {
 			maps: {}
@@ -5190,9 +5197,13 @@ angular.module("geo.map", [])
 			data.layer = null;
 		}
 	};
+
+    service.getGridLayer = function() {
+        return gridLayer;
+    };
 	
 	service.addMap = function(config) {
-		var map, gridLayer,
+		var map,
 			legendControlOptions = null;
 		
 		if(!config.name) {
@@ -5209,7 +5220,7 @@ angular.module("geo.map", [])
 
         if (config.gridLayer) {
             config.gridLayer.name = "Grid";
-            gridLayer = addLayer(config.gridLayer, map, map);
+            gridLayer = expandLayer(config.gridLayer);
         }
 
 		if(config.layers) {

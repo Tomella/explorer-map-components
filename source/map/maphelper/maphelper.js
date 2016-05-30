@@ -11,8 +11,9 @@ angular.module('geo.maphelper', ['geo.map'])
 
 .factory("mapHelper", ["mapService", "$timeout", "$q", "$rootScope", "flashService",
                        function(mapService, $timeout, $q, $rootScope, flashService){
-    var homeBounds = [[-47, 107],[-9, 156]];
+    var gridLayer, homeBounds = [[-47, 107],[-9, 156]];
     mapService.getMap().then(function(map) {
+        gridLayer = mapService.getGridLayer();
         homeBounds = map.getBounds();
     });
 
@@ -58,7 +59,12 @@ angular.module('geo.maphelper', ['geo.map'])
             });
         },
         showGrid:function(show) {
-            /// TODO
+            if (gridLayer) mapService.getMap().then(function(map) {
+                if (show)
+                    gridLayer.addTo(map);
+                else
+                    map.removeLayer(gridLayer);
+            });
         },
         markPoint:function(mapService){},
 		getPseudoBaseLayer:function(){
