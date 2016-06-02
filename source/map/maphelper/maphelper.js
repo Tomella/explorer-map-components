@@ -95,7 +95,9 @@ angular.module('geo.maphelper', ['geo.map'])
 		map.on("moveend", function(event) {
 			$timeout.cancel(helper.timeout);
 			helper.timeout = $timeout(function() {
-				$rootScope.$broadcast("extentOfInterestChanged", map);
+                helper.getExtentWkt().then(function(wkt) {
+                    $rootScope.$broadcast("extentOfInterestChanged", wkt);
+                });
 			}, helper.timoutPeriod);
 		});
 	});
