@@ -35,6 +35,27 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 	};
 }])
 
+.directive("expClickModalMapPoint", ['pointService', '$rootScope', function (pointService, $rootScope) {
+    return {
+        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
+        restrict: 'A',
+        link: function (scope) {
+            var enabled = false, drawing = false;
+            $rootScope.$on('drawhelper.active', function(event, drawingActive) {
+                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
+                drawing = drawingActive;
+            });
+            pointService.addMapListener(function(latlon) {
+                pointService.showPoint(enabled && !drawing && latlon);
+            }, this);
+            scope.$watch("unlinked", function(unlinked) {
+                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
+                enabled = unlinked.featureDetails;
+            }, true);
+        }
+    };
+}])
+
 .directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
 	var defaultOptions = {
 			actions : [],
