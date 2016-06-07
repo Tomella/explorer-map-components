@@ -40,7 +40,7 @@ angular.module("geo.map", [])
 	};
 }])
 
-.factory("mapService", ['$q', 'waiting', function($q, waiting) {
+.factory("mapService", ['$injector', '$filter', '$q', '$rootScope', 'waiting', function($injector, $filter, $q, $rootScope, waiting) {
 	var START_NAME = "MAP_",
 		nameIndex = 0,
 		lastMap,
@@ -132,7 +132,7 @@ angular.module("geo.map", [])
 							addLayer(child, map, group);
 						});
 						map.addLayer(group);
-					}					
+					}
 				} else {
 					addLayer(layer, map, map);
 					if(layer.pseudoBaseLayer && layer.legendUrl) {
@@ -144,11 +144,22 @@ angular.module("geo.map", [])
 			});
 		}
 
+        var elevGetter, transectSvc = $injector.get('transectService');
+        if (transectSvc.canGetElevationAtPoint()) {
+            elevGetter = function(latlng) {
+                return transectSvc.getElevationAtPoint(latlng).then(function(elev) {
+                    if (elev === null) return '';
+                    return "Elev: " + $filter('length')(Math.round(elev), true);
+                });
+            };
+        }
+
 		L.control.scale({imperial:false}).addTo(map);
 		L.control.mousePosition({
 				position:"bottomright", 
 				emptyString:"",
 				seperator : " ",
+                elevGetter: elevGetter,
 				latFormatter : function(lat) {
 					return "Lat " + L.Util.formatNum(lat, 5) + "°";
 				},
@@ -180,7 +191,7 @@ angular.module("geo.map", [])
 	};
 	
 	return service;
-	
+
 	function addLayer(layer, target, map) {
 		var leafLayer = expandLayer(layer);
 		leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;

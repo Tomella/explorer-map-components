@@ -109,7 +109,8 @@ angular.module("geo.elevation", [
 			};
 		}],
 
-		link : function(scope, element) {				
+		link : function(scope, element) {
+            console.log("pathelevationplot");
 			scope.graphClick = function(event) {
 				if(event.position) {
 					var point = event.position.points[0].point;
@@ -223,6 +224,7 @@ angular.module("geo.elevation", [
 		scope:true,
 		link : function(scope, element) {
 			scope.toggleWaterTableShowing = function() {
+                console.log("marsinfo");
 				scope.state = elevationService.getState();
 				
 				if(!elevationService.isWaterTableShowing()) {

@@ -156,9 +156,12 @@
                         return deferred.promise;
                     },
 
-                    getElevationAtPoint: function (cartographic) {
-                        var lng = Cesium.Math.toDegrees(cartographic.longitude),
-                            lat = Cesium.Math.toDegrees(cartographic.latitude);
+                    canGetElevationAtPoint: function () {
+                        return ptElevationUrl;
+                    },
+
+                    getElevationAtPoint: function (latlng) {
+                        var lng = latlng.lng, lat = latlng.lat;
                         if (lat < extent.latMin || lat > extent.latMax || lng < extent.lngMin || lng > extent.lngMax)
                             return $q.when(null);
 
@@ -180,26 +183,6 @@
                         return httpData.get(url + Exp.Util.toLineStringWkt(geometry), {cache: true}).then(function (response) {
                             return response.data.intersects;
                         });
-                    },
-
-                    loadWaterTableDS: function () {
-                        var deferred = $q.defer();
-                        Cesium.KmlDataSource.load(httpData.fixUrl(artesianBasinKmlUrl)).then(function(ds) {
-                            ds.entities.values.forEach(function(e) {
-                                if (e.polygon) {
-                                    e.polygon.material = new Cesium.GridMaterialProperty({
-                                        color: Cesium.Color.BLUE.withAlpha(0.3),
-                                        lineCount: new Cesium.Cartesian2(24, 24)
-                                    });
-                                    e.polygon.stRotation = 0.785398163;
-                                    e.polygon.outline = true;
-                                    e.polygon.outlineWidth = 8;
-                                    e.polygon.outlineColor = Cesium.Color.BLUE;
-                                }
-                            });
-                            deferred.resolve(ds);
-                        });
-                        return deferred.promise;
                     },
 
                     getWaterTable: function (geometry, distance) {

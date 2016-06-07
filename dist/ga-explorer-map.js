@@ -1947,7 +1947,8 @@ angular.module("geo.elevation", [
 			};
 		}],
 
-		link : function(scope, element) {				
+		link : function(scope, element) {
+            console.log("pathelevationplot");
 			scope.graphClick = function(event) {
 				if(event.position) {
 					var point = event.position.points[0].point;
@@ -2061,6 +2062,7 @@ angular.module("geo.elevation", [
 		scope:true,
 		link : function(scope, element) {
 			scope.toggleWaterTableShowing = function() {
+                console.log("marsinfo");
 				scope.state = elevationService.getState();
 				
 				if(!elevationService.isWaterTableShowing()) {
@@ -2241,115 +2243,6 @@ angular.module("geo.extent", [])
 
 })(angular, L);
 
-(function (angular, google, window) {
-
-'use strict';
-
-angular.module('geo.geosearch', ['ngAutocomplete'])
-
-.directive("expSearch", [function() {
-	return {
-		templateUrl : "components/geosearch/search.html",
-		scope : {
-			hideTo:"="
-		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
-			
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-				
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-							
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}		
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
-			});
-			return deferred.promise;   
-		}
-	};
-}]);
-
-}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2581,6 +2474,115 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
+(function (angular, google, window) {
+
+'use strict';
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+			
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");							
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+				
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+							
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}		
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode'] 
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;   
+		}
+	};
+}]);
+
+}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -4608,9 +4610,12 @@ function OverFeatureCtrl($filter, pointService) {
                         return deferred.promise;
                     },
 
-                    getElevationAtPoint: function (cartographic) {
-                        var lng = Cesium.Math.toDegrees(cartographic.longitude),
-                            lat = Cesium.Math.toDegrees(cartographic.latitude);
+                    canGetElevationAtPoint: function () {
+                        return ptElevationUrl;
+                    },
+
+                    getElevationAtPoint: function (latlng) {
+                        var lng = latlng.lng, lat = latlng.lat;
                         if (lat < extent.latMin || lat > extent.latMax || lng < extent.lngMin || lng > extent.lngMax)
                             return $q.when(null);
 
@@ -4632,26 +4637,6 @@ function OverFeatureCtrl($filter, pointService) {
                         return httpData.get(url + Exp.Util.toLineStringWkt(geometry), {cache: true}).then(function (response) {
                             return response.data.intersects;
                         });
-                    },
-
-                    loadWaterTableDS: function () {
-                        var deferred = $q.defer();
-                        Cesium.KmlDataSource.load(httpData.fixUrl(artesianBasinKmlUrl)).then(function(ds) {
-                            ds.entities.values.forEach(function(e) {
-                                if (e.polygon) {
-                                    e.polygon.material = new Cesium.GridMaterialProperty({
-                                        color: Cesium.Color.BLUE.withAlpha(0.3),
-                                        lineCount: new Cesium.Cartesian2(24, 24)
-                                    });
-                                    e.polygon.stRotation = 0.785398163;
-                                    e.polygon.outline = true;
-                                    e.polygon.outlineWidth = 8;
-                                    e.polygon.outlineColor = Cesium.Color.BLUE;
-                                }
-                            });
-                            deferred.resolve(ds);
-                        });
-                        return deferred.promise;
                     },
 
                     getWaterTable: function (geometry, distance) {
@@ -5022,6 +5007,7 @@ L.Control.MousePosition = L.Control.extend({
     emptyString: 'Unavailable',
     lngFirst: false,
     numDigits: 5,
+    elevGetter: undefined,
     lngFormatter: undefined,
     latFormatter: undefined,
     prefix: ""
@@ -5039,12 +5025,29 @@ L.Control.MousePosition = L.Control.extend({
     map.off('mousemove', this._onMouseMove);
   },
 
+  _onMouseHover: function () {
+    var info = this._hoverInfo;
+    this._hoverInfo = undefined;
+    this.options.elevGetter(info).then(function(elevStr) {
+       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
+       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
+    }.bind(this));
+  },
+
   _onMouseMove: function (e) {
-    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
-    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
-    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    var prefixAndValue = this.options.prefix + ' ' + value;
-    this._container.innerHTML = prefixAndValue;
+    var w = e.latlng.wrap();
+    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
+    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
+    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    if (this.options.elevGetter) {
+        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
+        this._hoverInfo = {
+            lat: w.lat,
+            lng: w.lng,
+            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
+        };
+    }
+    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
   }
 
 });
@@ -5063,6 +5066,7 @@ L.Map.addInitHook(function () {
 L.control.mousePosition = function (options) {
     return new L.Control.MousePosition(options);
 };
+
 L.Control.ZoomBox = L.Control.extend({
     _active: false,
     _map: null,
@@ -5287,7 +5291,7 @@ angular.module("geo.map", [])
 	};
 }])
 
-.factory("mapService", ['$q', 'waiting', function($q, waiting) {
+.factory("mapService", ['$injector', '$filter', '$q', '$rootScope', 'waiting', function($injector, $filter, $q, $rootScope, waiting) {
 	var START_NAME = "MAP_",
 		nameIndex = 0,
 		lastMap,
@@ -5379,7 +5383,7 @@ angular.module("geo.map", [])
 							addLayer(child, map, group);
 						});
 						map.addLayer(group);
-					}					
+					}
 				} else {
 					addLayer(layer, map, map);
 					if(layer.pseudoBaseLayer && layer.legendUrl) {
@@ -5391,11 +5395,22 @@ angular.module("geo.map", [])
 			});
 		}
 
+        var elevGetter, transectSvc = $injector.get('transectService');
+        if (transectSvc.canGetElevationAtPoint()) {
+            elevGetter = function(latlng) {
+                return transectSvc.getElevationAtPoint(latlng).then(function(elev) {
+                    if (elev === null) return '';
+                    return "Elev: " + $filter('length')(Math.round(elev), true);
+                });
+            };
+        }
+
 		L.control.scale({imperial:false}).addTo(map);
 		L.control.mousePosition({
 				position:"bottomright", 
 				emptyString:"",
 				seperator : " ",
+                elevGetter: elevGetter,
 				latFormatter : function(lat) {
 					return "Lat " + L.Util.formatNum(lat, 5) + "°";
 				},
@@ -5427,7 +5442,7 @@ angular.module("geo.map", [])
 	};
 	
 	return service;
-	
+
 	function addLayer(layer, target, map) {
 		var leafLayer = expandLayer(layer);
 		leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;
