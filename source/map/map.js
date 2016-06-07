@@ -140,7 +140,7 @@ angular.module("geo.map", [])
 					return "Lat " + L.Util.formatNum(lat, 5) + "°";
 				},
 				lngFormatter : function(lng) {
-					return "Lng " + L.Util.formatNum(lng, 5) + "°";
+					return "Lng " + L.Util.formatNum(lng % 180, 5) + "°";
 				}
 		}).addTo(map);
         if (!config.noZoomBox) {
