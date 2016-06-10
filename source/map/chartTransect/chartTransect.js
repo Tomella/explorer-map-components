@@ -91,7 +91,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
             httpData.get(service.url).then(function(response) {
 
                 var features = response.data.features;
-                console.log("features "+ features.length);
 
                 httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect-esri-meta.json').then(function(response) {
 
@@ -297,14 +296,14 @@ angular.module('geo.chart.transect', ['geo.transect'])
                     });
 
                     // cartoArray to calc surface distance
-                    cartoArray.push(viewerUtilsService.cartographicFromDegrees(coords[0], coords[1], coords[2]));
+//TODO                    cartoArray.push(viewerUtilsService.cartographicFromDegrees(coords[0], coords[1], coords[2]));
 
                     // for bisect lookup on mouseover
                     sortedXArray.push(coords[0]);
                 }
 
                 sortedXArray = sortedXArray.sort();
-                service.pathDistance = viewerUtilsService.cartographicArrayToSurfaceDistance(cartoArray);
+                service.pathDistance = 0;//viewerUtilsService.cartographicArrayToSurfaceDistance(cartoArray);
                 service.pathDistance = $filter('length')(service.pathDistance, true);
                 x.domain([d3.min(values, getX), d3.max(values, getX)]);
 
@@ -381,10 +380,10 @@ angular.module('geo.chart.transect', ['geo.transect'])
                         });
 
                         var position = {
-                            markerLonLat : L.latlng([target.ELEVATION.x, target.ELEVATION.y]),
+                            markerLonLat : L.latLng(target.ELEVATION.y, target.ELEVATION.x),
                             point:target.ELEVATION
                         };
-                        crosshairService.move(position);
+                        crosshairService.move(target.ELEVATION);
                         featureSummaryService.getAndShowFeatures(position);
                         service.targetData = target;
 

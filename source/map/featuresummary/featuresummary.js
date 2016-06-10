@@ -6,7 +6,29 @@
 
 angular.module("explorer.feature.summary", ["geo.map"])
 
-.directive("expPointFeatures", ['mapService', 'featureSummaryService', function(mapService, featureSummaryService) {
+.directive('featureSummaryToggle', ['mapHelper', function (mapHelper) {
+    return {
+        template: '<i class="fa fa-location-arrow fa-rotate-180"></i>',
+        link: function(scope) {
+            scope.$watch("unlinked", function(unlinked) {
+                mapHelper.fireEvent(unlinked.featureSummary? "featuresactivate": "featuresdeactivate");
+            }, true);
+        }
+    };
+}])
+
+.directive('featureGridToggle', ['mapHelper', function (mapHelper) {
+    return {
+        template: '<i class="fa fa-th"></i>',
+        link: function(scope) {
+            scope.$watch("unlinked", function(unlinked) {
+                mapHelper.showGrid(unlinked.featureGrid);
+            }, true);
+        }
+    };
+}])
+
+.directive("expPointFeatures", ['featureSummaryService', function(featureSummaryService) {
 	return {
 		scope : {
 			features:"="
@@ -32,9 +54,9 @@ angular.module("explorer.feature.summary", ["geo.map"])
         template: '<div exp-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>',
 		link : function(scope, element) {
 			mapService.getMap().then(function(map) {
-				var timeout, control = L.control.features();
-				
-				map.addControl(control);
+				var timeout;
+				if (element.attr("no-control") === undefined)
+                    map.addControl(L.control.features());
 				map.on("featuresactivate", featuresActivated);
 				map.on("featuresdeactivate", featuresDeactivated);
 				
@@ -44,18 +66,18 @@ angular.module("explorer.feature.summary", ["geo.map"])
 				}
 				
 				function featuresDeactivated(event) {
-					$timeout.cancel(timeout);
-					featureSummaryService.hidePopup();
+                    moveCancel();
 					map.off("mousemove", moveHandler);
 					map.off("mouseout", moveCancel);
 				}
 				
 				function moveCancel() {
-					$timeout.cancel(timeout);					
-				} 
+					$timeout.cancel(timeout);
+                    featureSummaryService.hidePopup();
+				}
 				
 				function moveHandler(event) {
-					$timeout.cancel(timeout);
+                    moveCancel();
 					timeout = $timeout(function() {
 						var position = {
 							markerLonLat : event.latlng,
@@ -69,12 +91,11 @@ angular.module("explorer.feature.summary", ["geo.map"])
 	};
 }])
 
-.factory("featureSummaryService", ['$log', 'configService', 'mapService', '$timeout', '$rootScope', '$q', '$http', function($log, configService, mapService, $timeout, $rootScope, $q, $http) {
+.factory("featureSummaryService", ['$log', 'configService', 'mapService', '$timeout', '$rootScope', '$q', 'httpData', function($log, configService, mapService, $timeout, $rootScope, $q, httpData) {
 	var featuresUnderPointUrl = "service/path/featureCount",
 		featuresUnderPoint,
 		map, marker, 
-		lastDeferredTimeout,
-		control;
+		lastDeferredTimeout;
 	
 	mapService.getMap().then(function(olMap) {
 		map = olMap; 
@@ -185,7 +206,7 @@ angular.module("explorer.feature.summary", ["geo.map"])
 				extent = map.getBounds();
 			
 			configService.getConfig("clientSessionId").then(function(id) {			
-				$http.post(featuresUnderPointUrl, {
+				httpData.post(featuresUnderPointUrl, {
 					clientSessionId:id,
 					x:point.x, 
 					y:point.y,
@@ -196,10 +217,10 @@ angular.module("explorer.feature.summary", ["geo.map"])
 						right : extent.right,
 						top: extent.top,
 						bottom: extent.bottom
-					}}).then(function(response) {
-						deferred.resolve(response.data);
+					}
+                }).then(function(response) {
+					deferred.resolve(response.data);
 				});
-				
 			});
 
 			return deferred.promise;

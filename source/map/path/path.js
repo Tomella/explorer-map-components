@@ -62,9 +62,8 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 	};
 }])
 
-.factory("pathService", ['$http', 'mapService', '$q', 'flashService', '$timeout', '$window', '$rootScope', 
-                            function($http, mapService, $q, flashService, $timeout, $window, $rootScope) {
-	return {	
+.factory("pathService", ['$rootScope', function($rootScope) {
+	return {
 		triggerElevationPlot : function(data) {
 			$rootScope.$broadcast("elevation.plot.data", data);
 		}

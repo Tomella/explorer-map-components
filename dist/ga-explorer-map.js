@@ -1180,7 +1180,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
             httpData.get(service.url).then(function(response) {
 
                 var features = response.data.features;
-                console.log("features "+ features.length);
 
                 httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect-esri-meta.json').then(function(response) {
 
@@ -1386,14 +1385,14 @@ angular.module('geo.chart.transect', ['geo.transect'])
                     });
 
                     // cartoArray to calc surface distance
-                    cartoArray.push(viewerUtilsService.cartographicFromDegrees(coords[0], coords[1], coords[2]));
+//TODO                    cartoArray.push(viewerUtilsService.cartographicFromDegrees(coords[0], coords[1], coords[2]));
 
                     // for bisect lookup on mouseover
                     sortedXArray.push(coords[0]);
                 }
 
                 sortedXArray = sortedXArray.sort();
-                service.pathDistance = viewerUtilsService.cartographicArrayToSurfaceDistance(cartoArray);
+                service.pathDistance = 0;//viewerUtilsService.cartographicArrayToSurfaceDistance(cartoArray);
                 service.pathDistance = $filter('length')(service.pathDistance, true);
                 x.domain([d3.min(values, getX), d3.max(values, getX)]);
 
@@ -1470,10 +1469,10 @@ angular.module('geo.chart.transect', ['geo.transect'])
                         });
 
                         var position = {
-                            markerLonLat : L.latlng([target.ELEVATION.x, target.ELEVATION.y]),
+                            markerLonLat : L.latLng(target.ELEVATION.y, target.ELEVATION.x),
                             point:target.ELEVATION
                         };
-                        crosshairService.move(position);
+                        crosshairService.move(target.ELEVATION);
                         featureSummaryService.getAndShowFeatures(position);
                         service.targetData = target;
 
@@ -1554,6 +1553,53 @@ angular.module('geo.chart.transect', ['geo.transect'])
 }]);
 
 })(angular, $, d3);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L) {
+
+'use strict';
+
+angular.module("explorer.crosshair", ['geo.map'])
+
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+	
+	mapService.getMap().then(function(olMap) { 
+		map = olMap; 
+	});
+	
+	return {		
+		add : function(point) {
+            this.move(point);
+		},
+		
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null; 
+			}
+		},
+		
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
+			});
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
+	};
+}]);
+
+})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1667,50 +1713,126 @@ angular.module("geo.draw", ['geo.map'])
 }]);
 
 })(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+/**
+ * Created by danielwild on 26/08/2015.
+ * Partially ported to leaflet by jammirali on 1/06/2016.
  */
 (function(angular, L) {
 
 'use strict';
 
-angular.module("explorer.crosshair", ['geo.map'])
+angular.module('geo.drawhelper', ['geo.map'])
 
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
-	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
-	});
-	
-	return {		
-		add : function(point) {
-            this.move(point);
-		},
-		
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null; 
-			}
-		},
-		
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
+/**
+ * A collection of helper functions for drawing shapes etc.
+ *
+ * PolyLine (renders with Primitive, for extruded 'fence')
+ * Polygon
+ * Extent
+ *
+ */
 
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
+
+.factory('drawHelperService', ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
+
+    var service = {}, callback, polygonDrawer, polylineDrawer, rectangleDrawer;
+
+    service.getDrawHelper = function(){
+
+        if (polygonDrawer) return $q.when(service);
+
+        var deferred = $q.defer();
+        mapService.getMap().then(function(map){
+            var options = {
+               color: '#000099',
+               opacity: 0.4
+            };
+            polygonDrawer = new L.Draw.Polygon(map, options);
+            polylineDrawer = new L.Draw.Polyline(map, options);
+            rectangleDrawer = new L.Draw.Rectangle(map, options);
+            map.on("draw:created", function(event) {
+                if (callback) ({
+                    polygon : function() {
+                        callback(event.layer.getLatLngs());
+                    },
+                    polyline : function() {
+                        callback({length:event.layer.getLength(), positions:event.layer.getLatLngs()});
+                    },
+                    rectangle : function() {
+                        callback(event.layer.getBounds());
+                    }
+                })[event.layerType]();
+                broadcastDrawState(false);
+            });
+            deferred.resolve(service);
+        });
+        return deferred.promise;
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingPolyline
+     *
+     * @param options {
+ *      callback: Function,
+ *      editable: Boolean,
+ *      width: Number, // ignored
+ *      geodesic: Boolean // ignored
+ * }
+     *
+     */
+    service.drawPolyline = function(options){
+        broadcastDrawState(true);
+        callback = options.callback;
+        polylineDrawer.enable();
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingPolygon
+     *
+     * @param options {
+*      callback: Function,
+*       editable: Boolean
+* }
+     *
+     */
+    service.drawPolygon = function(options){
+        broadcastDrawState(true);
+        callback = options.callback;
+        polygonDrawer.enable();
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingExtent
+     *
+     * @param options {
+*      callback: Function,
+*      editable: Boolean
+* }
+     *
+     */
+    service.drawExtent = function(options){
+        broadcastDrawState(true);
+        callback = options.callback;
+        rectangleDrawer.enable();
+    };
+
+    service.stopDrawing = function(){
+        callback = undefined;
+        polygonDrawer.disable();
+        polylineDrawer.disable();
+        rectangleDrawer.disable();
+        broadcastDrawState(false);
+    };
+
+    function broadcastDrawState(active){
+        $rootScope.$broadcast('drawhelper.active', active);
+    }
+
+    return service;
+
 }]);
 
 })(angular, L);
@@ -1825,7 +1947,8 @@ angular.module("geo.elevation", [
 			};
 		}],
 
-		link : function(scope, element) {				
+		link : function(scope, element) {
+            console.log("pathelevationplot");
 			scope.graphClick = function(event) {
 				if(event.position) {
 					var point = event.position.points[0].point;
@@ -1939,6 +2062,7 @@ angular.module("geo.elevation", [
 		scope:true,
 		link : function(scope, element) {
 			scope.toggleWaterTableShowing = function() {
+                console.log("marsinfo");
 				scope.state = elevationService.getState();
 				
 				if(!elevationService.isWaterTableShowing()) {
@@ -2122,236 +2246,34 @@ angular.module("geo.extent", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function (angular, L) {
-    'use strict';
-
-    angular.module("explorer.features", ['geo.maphelper', "explorer.httpdata"])
-
-        .directive('featureSummaryToggle', ['mapHelper', function (mapHelper) {
-            return {
-                template: '<i class="fa fa-location-arrow fa-rotate-180"></i>',
-                link: function(scope) {
-                    scope.$watch("unlinked", function(unlinked) {
-                        mapHelper.fireEvent(unlinked.featureSummary? "featuresactivate": "featuresdeactivate");
-                    }, true);
-                }
-            };
-        }])
-
-        .directive('featureGridToggle', ['mapHelper', function (mapHelper) {
-            return {
-                template: '<i class="fa fa-th"></i>',
-                link: function(scope) {
-                    scope.$watch("unlinked", function(unlinked) {
-                        mapHelper.showGrid(unlinked.featureGrid);
-                    }, true);
-                }
-            };
-        }])
-
-        .directive("xmarsPointFeatures", ['httpData', function (httpData) {
-            var anchorLeftTopMap = {
-                "rx_gt_lx": {
-                    "by_gt_ty": "leftTop",
-                    "by_le_ty": "leftBottom"
-                },
-                "rx_le_lx": {
-                    "by_gt_ty": "rightTop",
-                    "by_le_ty": "rightBottom"
-                }
-            };
-
-            return {
-                templateUrl: "cesium/featuresSummary.html",
-                scope: {
-                    features: "="
-                },
-                link: function (scope, element) {
-                    var unregister = scope.$watch("features", function () {
-                        if (scope.features) {
-                            httpData.get("resources/config/mars_feature_icon_mapping.json", {cache: true}).then(function (response) {
-                                scope.mappings = response && response.data;
-                                unregister();
-                            });
-                        }
-                    });
-
-                    scope.featurePanelPosition = function () {
-                        if (!scope.features || !scope.features.data) {
-                            return {left: -300, top: -200};
-                        }
-                        var textElement = element.find(".marsfeatures")[0],
-                            textBox = {
-                                element: textElement,
-                                connectionPoint: null
-                            },
-                            x = scope.features.mousePos.x,
-                            y = scope.features.mousePos.y,
-                            box = scope.features.viewer.canvas,
-                            rightX = box.width - x,
-                            leftX = x,
-                            topY = y,
-                            bottomY = box.height - y,
-                            anchorLeft = rightX > leftX ? "rx_gt_lx" : "rx_le_lx",
-                            anchorTop = bottomY > topY ? "by_gt_ty" : "by_le_ty",
-                            bottomOffset = scope.features.maxExtent ? 20 : 140;
-
-                        // Let the object look after itself.
-                        textBox.connectionPoint = function () {
-                            var textBox = this.element.getBoundingClientRect(),
-                                top = anchorTop ? y + 10 : y - textBox.height - 10,
-                                left = anchorTop ? x + 10 : x - textBox.width - 10;
-                            if (top < 20) {
-                                top = 20;
-                            } else if ((y + textBox.height) > (box.height - bottomOffset)) {
-                                top = box.height - bottomOffset - textBox.height;
-                            }
-                            if (left < 20) {
-                                left = 20;
-                            } else if ((left + textBox.width) > (box.width - 20)) {
-                                left = box.width - 20 - textBox.width;
-                            }
-                            return {left: left, top: top + 80};
-                        };
-                        scope.features.popupClass = anchorLeftTopMap[anchorLeft][anchorTop];
-
-                        return textBox.connectionPoint();
-                    };
-                }
-            };
-        }])
-
-        .directive("xfeaturesUnderPoint", ['featuresService', function (featuresService) {
-            return {
-                restrict: "EA",
-                template: '<div mars-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>',
-                link: function (scope) {
-                    featuresService.setSummaryHandler(function (features) {
-                        scope.featuresUnderPoint = features;
-                    });
-                }
-            };
-        }])
-
-        .factory("featuresService", ['configService', 'viewerService', 'viewerUtilsService', '$timeout', '$rootScope', '$q', 'httpData', function (configService, viewerService, viewerUtilsService, $timeout, $rootScope, $q, httpData) {
-            var clientSessionId,
-                pixelRatio = window.devicePixelRatio || 1,
-                featureCountUnderPointUrl = "service/path/featureCount",
-                featureInfoUnderPointUrl = "service/path/featureInfo",
-                ignorePendingSummaryResponse = true, // when summary is hidden during pending ajax call
-                featuresHandler,
-                mouseHoverOff,
-                mouseMovedOff;
-
-            function getFeatures(viewer, carto, url) {
-                if (!carto) return $q.when(null);
-
-                var deferred = $q.defer(), extent = viewerUtilsService.getBounds(viewer);
-                httpData.post(url || featureCountUnderPointUrl, {
-                    clientSessionId: clientSessionId,
-                    x: Cesium.Math.toDegrees(carto.longitude),
-                    y: Cesium.Math.toDegrees(carto.latitude),
-                    width: viewer.canvas.width / pixelRatio,
-                    height: viewer.canvas.height / pixelRatio,
-                    extent: {
-                        left: extent.left,
-                        right: extent.right,
-                        top: extent.top,
-                        bottom: extent.bottom
-                    }})
-                    .then(function (response) {
-                        deferred.resolve(response && response.data);
-                    }, function () {
-                        deferred.resolve(null);
-                    });
-
-                return deferred.promise;
-            }
-
-            function hideSummary() {
-                ignorePendingSummaryResponse = true;
-                if (featuresHandler) featuresHandler();
-            }
-
-            function onMouseMove(event, data) {
-                showSummary(data);
-            }
-
-            function showSummary(data) {
-                if (!featuresHandler) return;
-                ignorePendingSummaryResponse = false;
-                getFeatures(data.viewer, data.cartographic).then(function (response) {
-                    if (!featuresHandler || ignorePendingSummaryResponse) return;
-                    var features = {
-                        data: response, count: 0, viewer: data.viewer, mousePos: data.mousePos
-                    };
-                    angular.forEach(features.data || [], function (item) {
-                        features.count += item;
-                    });
-                    featuresHandler(features);
-                });
-            }
-
-            return {
-                getDetailsAtCartesian: function(cartesian) {
-                    return viewerService.getViewer().then(function(viewer) {
-                        return getFeatures(viewer,
-                            Cesium.Ellipsoid.WGS84.cartesianToCartographic(cartesian),
-                            featureInfoUnderPointUrl
-                        );
-                    });
-                },
-
-                setSummaryHandler: function (handler) {
-                    configService.getConfig("clientSessionId").then(function (id) {
-                        clientSessionId = id;
-                        featuresHandler = handler;
-                    });
-                },
-
-                showSummaryAtCartesian: function(cartesian) {
-                    if (cartesian) {
-                        viewerService.getViewer().then(function(viewer) {
-                            showSummary({
-                                cartesian: cartesian,
-                                cartographic: Cesium.Ellipsoid.WGS84.cartesianToCartographic(cartesian),
-                                mousePos: Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian),
-                                viewer: viewer
-                            });
-                        });
-                    } else {
-                        hideSummary();
-                    }
-                },
-
-                trackMouseMove: function (enable) {
-                    viewerService.showGrid(enable);
-                    if (enable) {
-                        if (!mouseHoverOff) {
-                            mouseHoverOff = $rootScope.$on('viewer.mouse.hover', onMouseMove);
-                            mouseMovedOff = $rootScope.$on('viewer.mouse.moved', hideSummary);
-                        }
-                    } else {
-                        hideSummary();
-                        if (mouseHoverOff) {
-                            mouseHoverOff();
-                            mouseMovedOff();
-                            mouseHoverOff = mouseMovedOff = undefined;
-                        }
-                    }
-                }
-            };
-        }]);
-})(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular, context) {
 'use strict';
 
 angular.module("explorer.feature.summary", ["geo.map"])
 
-.directive("expPointFeatures", ['mapService', 'featureSummaryService', function(mapService, featureSummaryService) {
+.directive('featureSummaryToggle', ['mapHelper', function (mapHelper) {
+    return {
+        template: '<i class="fa fa-location-arrow fa-rotate-180"></i>',
+        link: function(scope) {
+            scope.$watch("unlinked", function(unlinked) {
+                mapHelper.fireEvent(unlinked.featureSummary? "featuresactivate": "featuresdeactivate");
+            }, true);
+        }
+    };
+}])
+
+.directive('featureGridToggle', ['mapHelper', function (mapHelper) {
+    return {
+        template: '<i class="fa fa-th"></i>',
+        link: function(scope) {
+            scope.$watch("unlinked", function(unlinked) {
+                mapHelper.showGrid(unlinked.featureGrid);
+            }, true);
+        }
+    };
+}])
+
+.directive("expPointFeatures", ['featureSummaryService', function(featureSummaryService) {
 	return {
 		scope : {
 			features:"="
@@ -2377,9 +2299,9 @@ angular.module("explorer.feature.summary", ["geo.map"])
         template: '<div exp-point-features features="featuresUnderPoint" class="featuresUnderPoint"></div>',
 		link : function(scope, element) {
 			mapService.getMap().then(function(map) {
-				var timeout, control = L.control.features();
-				
-				map.addControl(control);
+				var timeout;
+				if (element.attr("no-control") === undefined)
+                    map.addControl(L.control.features());
 				map.on("featuresactivate", featuresActivated);
 				map.on("featuresdeactivate", featuresDeactivated);
 				
@@ -2389,18 +2311,18 @@ angular.module("explorer.feature.summary", ["geo.map"])
 				}
 				
 				function featuresDeactivated(event) {
-					$timeout.cancel(timeout);
-					featureSummaryService.hidePopup();
+                    moveCancel();
 					map.off("mousemove", moveHandler);
 					map.off("mouseout", moveCancel);
 				}
 				
 				function moveCancel() {
-					$timeout.cancel(timeout);					
-				} 
+					$timeout.cancel(timeout);
+                    featureSummaryService.hidePopup();
+				}
 				
 				function moveHandler(event) {
-					$timeout.cancel(timeout);
+                    moveCancel();
 					timeout = $timeout(function() {
 						var position = {
 							markerLonLat : event.latlng,
@@ -2414,12 +2336,11 @@ angular.module("explorer.feature.summary", ["geo.map"])
 	};
 }])
 
-.factory("featureSummaryService", ['$log', 'configService', 'mapService', '$timeout', '$rootScope', '$q', '$http', function($log, configService, mapService, $timeout, $rootScope, $q, $http) {
+.factory("featureSummaryService", ['$log', 'configService', 'mapService', '$timeout', '$rootScope', '$q', 'httpData', function($log, configService, mapService, $timeout, $rootScope, $q, httpData) {
 	var featuresUnderPointUrl = "service/path/featureCount",
 		featuresUnderPoint,
 		map, marker, 
-		lastDeferredTimeout,
-		control;
+		lastDeferredTimeout;
 	
 	mapService.getMap().then(function(olMap) {
 		map = olMap; 
@@ -2530,7 +2451,7 @@ angular.module("explorer.feature.summary", ["geo.map"])
 				extent = map.getBounds();
 			
 			configService.getConfig("clientSessionId").then(function(id) {			
-				$http.post(featuresUnderPointUrl, {
+				httpData.post(featuresUnderPointUrl, {
 					clientSessionId:id,
 					x:point.x, 
 					y:point.y,
@@ -2541,10 +2462,10 @@ angular.module("explorer.feature.summary", ["geo.map"])
 						right : extent.right,
 						top: extent.top,
 						bottom: extent.bottom
-					}}).then(function(response) {
-						deferred.resolve(response.data);
+					}
+                }).then(function(response) {
+					deferred.resolve(response.data);
 				});
-				
 			});
 
 			return deferred.promise;
@@ -2947,23 +2868,31 @@ angular.module('geo.maphelper', ['geo.map'])
 
 .factory("mapHelper", ["mapService", "$timeout", "$q", "$rootScope", "flashService",
                        function(mapService, $timeout, $q, $rootScope, flashService){
+    var gridLayer, homeBounds = [[-47, 107],[-9, 156]];
+    mapService.getMap().then(function(map) {
+        gridLayer = mapService.getGridLayer();
+        homeBounds = map.getBounds();
+    });
 
-	var  helper = { 
-		timeoutPeriod: 200, 
+	var  helper = {
+		timeoutPeriod: 200,
 		timeout : null,
 		callbacks:{}, 
 		checkMarkers:function(){},
 		zoomToMarkPoints:function(results, marker){
-            console.log("zooming to  " + results[0]);
 			mapService.getMap().then(function(map) {
-                console.log("really zooming to  " + results[0]);
 				map.setView(results[0], 12, {animate:true});
 			});
 		}, 
 		zoomToLonLats:function(mapService){},
         zoomToBounds:function(bounds){
             mapService.getMap().then(function(map) {
-                map.setView(results[0], 12, {animate:true});
+                map.fitBounds(bounds, {animate:true});
+            });
+        },
+        takeMeHomeCountryRoads:function(){
+            mapService.getMap().then(function(map) {
+                map.fitBounds(homeBounds, {animate:true});
             });
         },
         zoomOut:function(factor){
@@ -2987,7 +2916,12 @@ angular.module('geo.maphelper', ['geo.map'])
             });
         },
         showGrid:function(show) {
-            /// TODO
+            if (gridLayer) mapService.getMap().then(function(map) {
+                if (show)
+                    gridLayer.addTo(map);
+                else
+                    map.removeLayer(gridLayer);
+            });
         },
         markPoint:function(mapService){},
 		getPseudoBaseLayer:function(){
@@ -3000,7 +2934,6 @@ angular.module('geo.maphelper', ['geo.map'])
 				});
 				return response;
 			});
-			
 		},
 		subscribe:function(name, func)	{	
 			if (!this.callbacks[name]) this.callbacks[name]={ subscribers:[] };
@@ -3016,13 +2949,14 @@ angular.module('geo.maphelper', ['geo.map'])
 	};
 	
 	mapService.getMap().then(function(map) {
-		map.on("moveend", handleChange);
-		function handleChange(event) {
+		map.on("moveend", function(event) {
 			$timeout.cancel(helper.timeout);
 			helper.timeout = $timeout(function() {
-				$rootScope.$broadcast("extentOfInterestChanged", map);
+                helper.getExtentWkt().then(function(wkt) {
+                    $rootScope.$broadcast("extentOfInterestChanged", wkt);
+                });
 			}, helper.timoutPeriod);
-		}
+		});
 	});
 	
 	
@@ -3030,33 +2964,6 @@ angular.module('geo.maphelper', ['geo.map'])
 }]);
 
 })(angular, window, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(angular){
-'use strict';
-
-angular.module("geo.measure", [])
-
-.directive("geoMeasure", ['$log', function($log) {
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		link : function(scope, element, attrs, ctrl) {
-			ctrl.getMap().then(function(map) {
-				L.Control.measureControl().addTo(map);
-				// TODO. See if it is useful
-				map.on("draw:drawstop", function(data) {
-					$log.info("Draw stopped");
-					$log.info(data);
-				});
-			});
-		}
-	};
-}]);
-
-})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -3087,6 +2994,33 @@ angular.module("explorer.mapstate", [])
 				if(state) {
 					mapService.setState(state);
 				}
+			});
+		}
+	};
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular){
+'use strict';
+
+angular.module("geo.measure", [])
+
+.directive("geoMeasure", ['$log', function($log) {
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		link : function(scope, element, attrs, ctrl) {
+			ctrl.getMap().then(function(map) {
+				L.Control.measureControl().addTo(map);
+				// TODO. See if it is useful
+				map.on("draw:drawstop", function(data) {
+					$log.info("Draw stopped");
+					$log.info(data);
+				});
 			});
 		}
 	};
@@ -3157,9 +3091,8 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 	};
 }])
 
-.factory("pathService", ['$http', 'mapService', '$q', 'flashService', '$timeout', '$window', '$rootScope', 
-                            function($http, mapService, $q, flashService, $timeout, $window, $rootScope) {
-	return {	
+.factory("pathService", ['$rootScope', function($rootScope) {
+	return {
 		triggerElevationPlot : function(data) {
 			$rootScope.$broadcast("elevation.plot.data", data);
 		}
@@ -4060,6 +3993,27 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 	};
 }])
 
+.directive("expClickModalMapPoint", ['pointService', '$rootScope', function (pointService, $rootScope) {
+    return {
+        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
+        restrict: 'A',
+        link: function (scope) {
+            var enabled = false, drawing = false;
+            $rootScope.$on('drawhelper.active', function(event, drawingActive) {
+                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
+                drawing = drawingActive;
+            });
+            pointService.addMapListener(function(latlon) {
+                pointService.showPoint(enabled && !drawing && latlon);
+            }, this);
+            scope.$watch("unlinked", function(unlinked) {
+                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
+                enabled = unlinked.featureDetails;
+            }, true);
+        }
+    };
+}])
+
 .directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
 	var defaultOptions = {
 			actions : [],
@@ -4082,13 +4036,12 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 			}
 		}],
 		link : function(scope, element) {
-			console.log("Id = ", scope.$id);
 			// This things is a one shot wonder so we listen for an event.
 			$rootScope.$on("map.point.changed", function(event, point) {
 				scope.point = point;
 				pointService.removeLayer();
-				if(typeof point != "undefined" && point) {
-					scope.changePoint(point);
+                scope.changePoint(point);
+				if(point) {
 					pointService.getMetaData().then(function(response) {
 						scope.metadata = response.data;
 					});
@@ -4209,7 +4162,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 	};
 }])
 
-.factory("pointService", ['$http', '$q', 'configService', 'mapService', '$rootScope', function($http, $q, configService, mapService, $rootScope){
+.factory("pointService", ['httpData', '$q', 'configService', 'mapService', '$rootScope', function(httpData, $q, configService, mapService, $rootScope){
 	var featuresUnderPointUrl = "service/path/featureInfo",
 		layer = null,
 		control = null,
@@ -4253,11 +4206,11 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 				type: "rings"
 			}
 		},
-		metaDataUrl = "map/point/pointMetadata.json",
+		metaDataUrl = httpData.baseUrlForPkg('ga-explorer-map') + 'resources/point/pointMetadata.json',
 		marker = null,
 		clickControl = null,
 		clickListeners = [];
-	
+
 	return {
 		triggerElevationPlot : function(geometry, label) {
 			var distance = geometry.getLength();
@@ -4299,7 +4252,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 		},
 		
 		getMetaData : function() {
-			return $http.get(metaDataUrl, {cache:true});
+			return httpData.get(metaDataUrl, {cache:true});
 		},
 		
 		moveMarker : function(point) {
@@ -4309,7 +4262,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 				if(marker) {
 					map.removeLayer(marker);
 				}
-				marker = L.marker(point).addTo(map);
+				marker = point? L.marker(point).addTo(map): null;
 			});
 			
 		},
@@ -4342,7 +4295,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 					extent = map.getBounds();
 
 				return configService.getConfig("clientSessionId").then(function(id) {			
-					return $http.post(featuresUnderPointUrl, {
+					return httpData.post(featuresUnderPointUrl, {
 							clientSessionId : id,
 							x:point.x, 
 							y:point.y, 
@@ -4472,16 +4425,13 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
 function OverFeatureCtrl($filter, pointService) {
 	this.click = function() {
-		console.log("Click");
 	};
 
 	this.mouseenter = function(feature) {
-		console.log("enter");
 		pointService.overFeatures(feature.feature);
 	};
 	
 	this.mouseleave = function(feature) {
-		console.log("leave");
 		pointService.outFeatures(feature.feature);
 	};
 	
@@ -4660,9 +4610,12 @@ function OverFeatureCtrl($filter, pointService) {
                         return deferred.promise;
                     },
 
-                    getElevationAtPoint: function (cartographic) {
-                        var lng = Cesium.Math.toDegrees(cartographic.longitude),
-                            lat = Cesium.Math.toDegrees(cartographic.latitude);
+                    canGetElevationAtPoint: function () {
+                        return ptElevationUrl;
+                    },
+
+                    getElevationAtPoint: function (latlng) {
+                        var lng = latlng.lng, lat = latlng.lat;
                         if (lat < extent.latMin || lat > extent.latMax || lng < extent.lngMin || lng > extent.lngMax)
                             return $q.when(null);
 
@@ -4684,26 +4637,6 @@ function OverFeatureCtrl($filter, pointService) {
                         return httpData.get(url + Exp.Util.toLineStringWkt(geometry), {cache: true}).then(function (response) {
                             return response.data.intersects;
                         });
-                    },
-
-                    loadWaterTableDS: function () {
-                        var deferred = $q.defer();
-                        Cesium.KmlDataSource.load(httpData.fixUrl(artesianBasinKmlUrl)).then(function(ds) {
-                            ds.entities.values.forEach(function(e) {
-                                if (e.polygon) {
-                                    e.polygon.material = new Cesium.GridMaterialProperty({
-                                        color: Cesium.Color.BLUE.withAlpha(0.3),
-                                        lineCount: new Cesium.Cartesian2(24, 24)
-                                    });
-                                    e.polygon.stRotation = 0.785398163;
-                                    e.polygon.outline = true;
-                                    e.polygon.outlineWidth = 8;
-                                    e.polygon.outlineColor = Cesium.Color.BLUE;
-                                }
-                            });
-                            deferred.resolve(ds);
-                        });
-                        return deferred.promise;
                     },
 
                     getWaterTable: function (geometry, distance) {
@@ -4775,94 +4708,6 @@ L.Control.Features = L.Control.extend({
 
 L.control.features = function (options) {
 	return new L.Control.Features(options);
-};
-	
-})(L);
-
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Legend = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-		overlayClass: 'leaflet-legend',
-	    className: 'fa fa-list',
-	    modal: false,
-		url: 'resources/img/NationalLegend.png'
-	},
-	
-	onAdd: function (map) {
-		var them = this;
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
-	    this._container.title = "Show legend";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent
-	            .on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(){
-	        them._active = !them._active;
-	       
-	        if(them._active) {
-	        	them._legend = L.control({position: 'topleft'});
-
-	        	them._legend.onAdd = function (map) {
-	        		var div = L.DomUtil.create('div', them.options.overlayClass),
-						html = '<img src="' + them.options.url + '"></img>';
-					
-					L.DomEvent.disableClickPropagation(div).disableScrollPropagation(div).on(div, 'keydown', function(event) {
-						if (event.keyCode == 24) {
-							this.scrollTop -= 20;
-							stop(event);
-						} else if (event.keyCode == 25) {
-							this.scrollTop += 20;
-							stop(event);
-						}
-						
-						function stop(event) {
-							event.stopPropogation();
-							event.preventDefault();
-						}
-					});
-						
-	        		div.innerHTML = html;
-					div.tabIndex = 0;
-					div.focus();
-	        		return div;
-	        	};
-	        	map.addControl(them._legend);
-	    		L.DomUtil.addClass(them._container, 'active');
-	        } else {
-				
-	        	map.removeControl(them._legend);
-				L.DomUtil.removeClass(them._container, 'active');
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.legend = function (options) {
-	return new L.Control.Legend(options);
 };
 	
 })(L);
@@ -5067,6 +4912,94 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
+L.Control.Legend = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+		overlayClass: 'leaflet-legend',
+	    className: 'fa fa-list',
+	    modal: false,
+		url: 'resources/img/NationalLegend.png'
+	},
+	
+	onAdd: function (map) {
+		var them = this;
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
+	    this._container.title = "Show legend";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent
+	            .on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(){
+	        them._active = !them._active;
+	       
+	        if(them._active) {
+	        	them._legend = L.control({position: 'topleft'});
+
+	        	them._legend.onAdd = function (map) {
+	        		var div = L.DomUtil.create('div', them.options.overlayClass),
+						html = '<img src="' + them.options.url + '"></img>';
+					
+					L.DomEvent.disableClickPropagation(div).disableScrollPropagation(div).on(div, 'keydown', function(event) {
+						if (event.keyCode == 24) {
+							this.scrollTop -= 20;
+							stop(event);
+						} else if (event.keyCode == 25) {
+							this.scrollTop += 20;
+							stop(event);
+						}
+						
+						function stop(event) {
+							event.stopPropogation();
+							event.preventDefault();
+						}
+					});
+						
+	        		div.innerHTML = html;
+					div.tabIndex = 0;
+					div.focus();
+	        		return div;
+	        	};
+	        	map.addControl(them._legend);
+	    		L.DomUtil.addClass(them._container, 'active');
+	        } else {
+				
+	        	map.removeControl(them._legend);
+				L.DomUtil.removeClass(them._container, 'active');
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.legend = function (options) {
+	return new L.Control.Legend(options);
+};
+	
+})(L);
+
 L.Control.MousePosition = L.Control.extend({
   options: {
     position: 'bottomleft',
@@ -5074,6 +5007,7 @@ L.Control.MousePosition = L.Control.extend({
     emptyString: 'Unavailable',
     lngFirst: false,
     numDigits: 5,
+    elevGetter: undefined,
     lngFormatter: undefined,
     latFormatter: undefined,
     prefix: ""
@@ -5091,12 +5025,29 @@ L.Control.MousePosition = L.Control.extend({
     map.off('mousemove', this._onMouseMove);
   },
 
+  _onMouseHover: function () {
+    var info = this._hoverInfo;
+    this._hoverInfo = undefined;
+    this.options.elevGetter(info).then(function(elevStr) {
+       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
+       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
+    }.bind(this));
+  },
+
   _onMouseMove: function (e) {
-    var lng = this.options.lngFormatter ? this.options.lngFormatter(e.latlng.lng) : L.Util.formatNum(e.latlng.lng, this.options.numDigits);
-    var lat = this.options.latFormatter ? this.options.latFormatter(e.latlng.lat) : L.Util.formatNum(e.latlng.lat, this.options.numDigits);
-    var value = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    var prefixAndValue = this.options.prefix + ' ' + value;
-    this._container.innerHTML = prefixAndValue;
+    var w = e.latlng.wrap();
+    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
+    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
+    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    if (this.options.elevGetter) {
+        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
+        this._hoverInfo = {
+            lat: w.lat,
+            lng: w.lng,
+            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
+        };
+    }
+    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
   }
 
 });
@@ -5115,6 +5066,7 @@ L.Map.addInitHook(function () {
 L.control.mousePosition = function (options) {
     return new L.Control.MousePosition(options);
 };
+
 L.Control.ZoomBox = L.Control.extend({
     _active: false,
     _map: null,
@@ -5339,12 +5291,13 @@ angular.module("geo.map", [])
 	};
 }])
 
-.factory("mapService", ['$q', 'waiting', function($q, waiting) {
+.factory("mapService", ['$injector', '$filter', '$q', '$rootScope', 'waiting', function($injector, $filter, $q, $rootScope, waiting) {
 	var START_NAME = "MAP_",
 		nameIndex = 0,
 		lastMap,
 		waiters,
 		layerControl,
+        gridLayer,
 		groups = {},
 		service = {
 			maps: {}
@@ -5394,6 +5347,10 @@ angular.module("geo.map", [])
 			data.layer = null;
 		}
 	};
+
+    service.getGridLayer = function() {
+        return gridLayer;
+    };
 	
 	service.addMap = function(config) {
 		var map,
@@ -5405,8 +5362,16 @@ angular.module("geo.map", [])
 		
 		lastMap = config.name;
 		
-		map = service.maps[config.name] = new L.Map(config.element, {center: config.options.center, zoom: config.options.zoom});
-        console.log("nzb " + config.noZoomBox);
+		map = service.maps[config.name] = new L.Map(config.element, {
+            center: config.options.center,
+            zoom: config.options.zoom,
+            zoomControl: !config.options.noZoomControl
+        });
+
+        if (config.gridLayer) {
+            config.gridLayer.name = "Grid";
+            gridLayer = expandLayer(config.gridLayer);
+        }
 
 		if(config.layers) {
 			config.layers.forEach(function(layer) {
@@ -5418,7 +5383,7 @@ angular.module("geo.map", [])
 							addLayer(child, map, group);
 						});
 						map.addLayer(group);
-					}					
+					}
 				} else {
 					addLayer(layer, map, map);
 					if(layer.pseudoBaseLayer && layer.legendUrl) {
@@ -5430,11 +5395,22 @@ angular.module("geo.map", [])
 			});
 		}
 
+        var elevGetter, transectSvc = $injector.get('transectService');
+        if (transectSvc.canGetElevationAtPoint()) {
+            elevGetter = function(latlng) {
+                return transectSvc.getElevationAtPoint(latlng).then(function(elev) {
+                    if (elev === null) return '';
+                    return "Elev: " + $filter('length')(Math.round(elev), true);
+                });
+            };
+        }
+
 		L.control.scale({imperial:false}).addTo(map);
 		L.control.mousePosition({
 				position:"bottomright", 
 				emptyString:"",
 				seperator : " ",
+                elevGetter: elevGetter,
 				latFormatter : function(lat) {
 					return "Lat " + L.Util.formatNum(lat, 5) + "°";
 				},
@@ -5442,18 +5418,16 @@ angular.module("geo.map", [])
 					return "Lng " + L.Util.formatNum(lng, 5) + "°";
 				}
 		}).addTo(map);
-        if (!config.noZoomBox) {
-            map.addControl(L.control.zoomBox({
+        if (!config.options.noZoomControl) {
+            L.control.zoomBox({
                 //modal: true,  // If false (default), it deactivates after each use.
                 // If true, zoomBox control stays active until you click on the control to deactivate.
                 // position: "topleft",
                 // className: "customClass"  // Class to use to provide icon instead of Font Awesome
-            }));
+            }).addTo(map);
+            //L.control.zoomout().addTo(map);
         }
 
-		//L.control.zoomout().addTo(map);
-		
-		
 		global.map = map;
 		if(waiters) {
 			waiters.resolve(map);
@@ -5468,7 +5442,7 @@ angular.module("geo.map", [])
 	};
 	
 	return service;
-	
+
 	function addLayer(layer, target, map) {
 		var leafLayer = expandLayer(layer);
 		leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;

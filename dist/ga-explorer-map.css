@@ -5,7 +5,7 @@
   bottom: 5px;
   right: 0;
   font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
-  width: 16em;
+  min-width: 16em;
 }
 
 .leaflet-control-scale-line {

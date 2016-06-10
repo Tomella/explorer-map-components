@@ -1,0 +1,318 @@
+{
+	"PopulatedPlaces" : {
+		"heading" : "Populated Places",
+        "label" : "Populated place",
+        "description":"Named settlement with a population of 200 or more persons",
+        "preferredLabel" : "NAME",
+        "attributes" : [
+        	{
+        		"key" : "NAME",
+        		"label" : "Name"
+        	},
+			{
+        		"key" : "FEATURETYPE",
+				"label" : "Type"
+			},
+			{
+        		"key" : "POPULATION",
+				"label" : "Population"
+			},
+			{
+        		"key" : "TEXTNOTE",
+				"label" : "Note"
+			}
+        	
+        ]
+   	},
+	"Roads" : {
+		"heading" : "Roads",
+        "label" : "Road",
+        "description":"Route for the movement of vehicles",
+        "preferredLabel" : "NAME",
+        "attributes":[
+			{
+        		"key" : "NAME",
+				"label" : "Name"
+			},
+			{
+        		"key" : "FEATURETYPE",
+				"label" : "Type"
+			},
+			{
+        		"key" : "CLASS",
+				"label" : "Class"
+			},
+			{
+        		"key" : "FORMATION",
+				"label" : "Formation"
+			},
+			{
+        		"key" : "FEATURESOURCE",
+				"label" : "Source"
+			},
+			{
+        		"key" : "REVISED",
+				"label" : "Revised"
+			}
+		]
+	},
+    "Railways" : {
+    	"heading" : "Railways",
+        "label" : "Railway",
+        "description":"Transportation system using one or more rails to carry freight or passengers",
+        "preferredLabel" : "ROUTENAME",
+        "attributes": [
+        	{
+        		"key" : "FEATURETYPE",
+        		"label" : "Type"
+        	},
+        	{
+        		"key" : "ROUTENAME",
+        		"label" : "Route name"
+        	},
+        	{
+        		"key" : "GAUGE",
+        		"label" : "Gauge"
+        	},
+        	{
+        		"key" : "STATUS",
+        		"label" : "Status" 
+        	},
+        	{
+        		"key" : "TRACKS",
+        		"label" : "Tracks"
+        	}
+		]
+    },
+    "Pipelines_Complex" : {
+    	"heading" : "Pipelines",
+        "label" : "Pipeline",
+        "description":"Hollow cylinder of variable dimensions used for carrying substances such as gas, water, oil, sewage, etc.",
+        "preferredLabel" : "NAME",
+        "attributes": [
+        	{
+        		"key" : "NAME",
+        		"label" : "Name"
+        	},
+        	{
+        		"key" : "FEATURETYPE",
+        		"label" : "Type"
+        	},
+        	{
+        		"key" : "STATUS",
+        		"label" : "Status"
+        	},
+        	{
+        		"key" : "RELATIONSHIP",
+        		"label" : "Relationship"
+        	},
+        	{
+        		"key" : "STATUS",
+        		"label" : "Status" 
+        	},
+        	{
+        		"key" : "TEXTNOTE",
+        		"label" : "Note"
+        	}
+		]
+    },
+    "NationalTransmissionLines" : {
+    	"heading" : "Electricity transmission lines",
+        "label" : "Electricity transmission line",
+        "description":"Wire or wires supported on poles, towers or pylons, used for the transmission of high voltage electricity",
+        "preferredLabel" : "ROUTENAME",
+        "attributes" : [
+        	{
+        		"key" : "ROUTENAME",
+        		"label" : "Route name"
+        	},
+        	{
+        		"key" : "FEATURETYPE",
+        		"label": "Type"
+        	},
+        	{
+        		"key" : "STATUS",
+        		"label" : "Status"
+        	},
+        	{
+        		"key" : "CAPACITYKV",
+        		"label" : "Capacity (kV)"
+        	},
+        	{
+        		"key" : "REVISED",
+        		"label" : "Revised"
+        	}
+        ]
+    },
+    "UCLs" : {
+    	"heading" : "Urban Centres and Localities",
+        "label" : "Urban Centre or Locality",
+        "description":"Australian Bureau of Statistics defined Urban Centres and Localities",
+        "preferredLabel" : "UCL_NAME11",
+        "attributes" : [
+        	{
+        		"key" : "UCL_NAME11",
+        		"label" : "Name",
+        		"order" : 0
+        	},
+        	{
+        		"key" : "SOS_NAME11",
+        		"label" : "Type",
+        		"order" : 1
+        	},
+        	{
+        		"key" : "SSR_NAME11",
+        		"label" : "Population",
+        		"order" : 2
+        	},
+        	{
+        		"key" : "AREA_SQKM",
+        		"label" : "Area (sq km)", 
+        		"order" : 3
+        	}
+		]
+    },
+    "Reservoirs" : {
+    	"heading" : "Reservoirs",
+        "label" : "Reservoir",
+        "description":"A body of water collected and stored behind constructed barriers",
+        "preferredLabel" : "NAME",
+        "attributes": [
+        	{
+        		"key" : "NAME",
+        		"label" : "Name",
+        		"order" : 0
+        	},
+        	{
+        		"key" : "FEATURETYPE",
+        		"label" : "Type",
+        		"order" : 1
+        	},
+        	{
+        		"key" : "VOLUMEGAL",
+        		"label" : "Volume (gal.)",
+        		"order" : 2
+        	},
+        	{
+        		"key" : "TEXTNOTE",
+        		"label" : "Note",
+        		"order" : 3
+        	}
+        ]
+    },
+    "Reserves" : {
+    	"heading" : "Reserves",
+        "label" : "Reserve",
+        "description":"Land reserved for nature conservation, forestry, water supply or its indigenous significance",
+        "preferredLabel" : "NAME",
+        "attributes":[
+        	{
+        		"key" : "NAME",
+        		"label" : "Name",
+        		"order" : 0
+        	},
+        	{
+        		"key" : "FEATURETYPE",
+        		"label" : "Type",
+        		"order" : 1
+        	},
+        	{
+        		"key" : "AUTHORITY",
+        		"label" : "Authority",
+        		"order" : 2
+        	}
+        ]
+    },
+    "PSMACadLiteEasements" : {
+    	"heading" : "Easements",
+        "label" : "Easement",
+        "description":"Cadastral parcel identified in a plan representing land defined as an easement over other parcels",
+        "preferredLabel" : "NAME",
+        "attributes" : [
+        	{
+        		"key" : "NAME",
+        		"label" : "Name",
+        		"order" : 0
+        	},
+        	{
+        		"key" : "DESCRIPTION",
+        		"label" : "Description",
+        		"order" : 1
+        	},
+        	{
+        		"key" : "JURISDICTION_ID",
+        		"label" : "Jurisdiction",
+        		"order" : 2
+        	}
+        ]
+    },
+    "ProhibitedAreas" : {
+    	"heading" : "Lakes",
+        "label" : "Prohibited area",
+        "description":"Area into which entry is restricted or prohibited without permission from the controlling authority",
+        "preferredLabel" : "NAME",
+        "attributes":[
+        	{
+        		"key" : "NAME",
+        		"label" : "Name",
+        		"order" : 0
+        	},
+        	{
+        		"key" : "FEATURETYPE",
+        		"label" : "Type",
+        		"order" : 1
+        	},
+        	{
+        		"key" : "AUTHORITY",
+        		"label" : "Authority",
+        		"order" : 2
+        	}
+        ]
+    },
+    "Lakes" : {
+    	"heading" : "Lakes",
+        "label" : "Lake",
+        "description":"Naturally occurring body of mainly static water surrounded by land",
+        "preferredLabel" : "NAME",
+        "attributes" : [
+        	{
+        		"key" : "NAME",
+        		"label" : "Name",
+        		"order" : 0
+        	},
+        	{
+        		"key" : "FEATURETYPE",
+        		"label" : "Type",
+        		"order" : 1
+        	},
+        	{
+        		"key" : "PERENNIALITY",
+        		"label" : "Perenniality",
+        		"order" : 2
+        	},
+        	{
+        		"key" : "TEXTNOTE",
+        		"label" : "Note" ,
+        		"order" : 3
+        	}
+        ]
+    },
+    "BuiltUpAreas" : {
+    	"heading" : "Built up areas",
+        "label" : "Built up area",
+        "description":"Concentration of buildings surrounding a network of roads and supported by other associated infrastructure",
+        "preferredLabel" : "NAME",
+        "attributes":[
+        	{
+        		"key" : "NAME",
+        		"label" : "Name",
+        		"order" : 0
+        	},
+        	{
+        		"key" : "FEATURETYPE",
+        		"label" : "Type",
+        		"order" : 1
+        	}
+        ]
+    }
+}

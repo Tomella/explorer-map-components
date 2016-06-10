@@ -62,13 +62,18 @@ gulp.task('concatCss', function () {
     .pipe(gulp.dest('dist/'));
 });
 
+gulp.task('resources', function () {
+  return gulp.src('source/map/**/*.json')
+      .pipe(gulp.dest('dist/resources'));
+});
+
 gulp.task('vendors', function() {
   return gulp.src(['source/vendor/**'])
       .pipe(gulp.dest('dist/vendor'));
 });
 
 // Default Task
-gulp.task('default', ['lint', 'scripts', 'concatCss', 'vendors', 'watch']);
+gulp.task('default', ['lint', 'scripts', 'concatCss', 'resources', 'vendors', 'watch']);
 
 function prepareTemplates() {
    return gulp.src('source/map/**/*.html')
