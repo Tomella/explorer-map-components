@@ -118,29 +118,14 @@ angular.module('explorer.layers', ['geo.map'])
 	// Because it is asynch it uses a promise instead of a lump to draw.
 	typeProtos.Tile = Object.create(typeProtos.WMS);
 	typeProtos.Tile.addToMap = function() {
-		// This might be the second time in.
-		if(!this.layer) {
-			mapService.addLayer(this).then(function(layer) {
-				try {
-					this.layer = layer;
-					this.layer.feature = this;
-					shuffleBelowMarkers(this);
-				} catch(e) {
-					$log.warn("Why is there no function?");
-				}
-			}.bind(this));
-		} else {
-			this.layer.visibility = this.visibility = false;
-			this.map.addLayer(this.layer);
-			shuffleBelowMarkers(this);
-		}	
-		
-		function shuffleBelowMarkers(that) {
-			var markers = that.map.getLayersByClass("OpenLayers.Layer.Markers");
-			markers.forEach(function(marker) {
-				that.map.setLayerIndex(marker, that.map.layers.length - 1);
-			}.bind(that));
-		}			
+      if(!this.layer) {
+   		// IT really does nothing
+			this.layer = L.tileLayer(this.tilecacheUrl, {
+			    format: 'image/png',
+			    transparent: true
+			});
+      }   
+		return $q.when(this.layer);	
 	};
 
 	typeProtos.Vector = Object.create(typeProtos.WMS);
