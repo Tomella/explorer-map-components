@@ -204,6 +204,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
                 .x(function(d) { return x(+d.x); })
                 .y(function(d) { return y(+d.z); });
 
+            d3.selectAll("#transectChartD3 svg").remove();
             var svg = d3.select("#transectChartD3").append("svg")
                 .attr("width", width + margin.left + margin.right)
                 .attr("height", height + margin.top + margin.bottom)
@@ -372,7 +373,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
 
                         // use invertedX value to find index in our lookup array
                         var index = d3.bisectLeft(sortedXArray, x.invert(d3.mousex));
-//                        index = sortedXArray.length - index;
                         var target = {};
 
                         service.properties.forEach(function(property){

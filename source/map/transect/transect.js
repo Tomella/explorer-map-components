@@ -46,9 +46,6 @@
             var diagonal = 500,
                 layers = {},
                 ptElevationUrl,
-                waterTableUrl = "service/path/waterTable",
-                artesianBasinKmlUrl = "service/artesianBasin/geometry/kml",
-                intersectUrl = "service/artesianBasin/intersects",
                 extent = {
                     lngMin: 112.99986111100009,
                     lngMax: 153.999861113351,
@@ -63,24 +60,12 @@
                 extent.latMax = angular.isUndefined(newExtent.latMax)? extent.latMax: newExtent.latMax;
             };
 
-            this.setIntersectUrl = function (url) {
-                intersectUrl = url;
-            };
-
-            this.setKmlUrl = function (url) {
-                artesianBasinKmlUrl = url;
-            };
-
             this.setServiceUrl = function(name, url) {
                 name = name.toLowerCase();
                 layers[name] = {
                     urlTemplate: url
                 };
                 if (name === "elevation") ptElevationUrl = url.replace(/{height}|{width}/g,"1");
-            };
-
-            this.setWaterTableUrl = function (url) {
-                waterTableUrl = url;
             };
 
             function calcSides(diagonal, ar) {
@@ -176,23 +161,6 @@
                             deferred.resolve(elev);
                         });
                         return deferred.promise;
-                    },
-
-                    intersectsWaterTable: function (geometry) {
-                        var url = intersectUrl + (intersectUrl.indexOf("?") > -1 ? "" : "?wkt=");
-                        return httpData.get(url + Exp.Util.toLineStringWkt(geometry), {cache: true}).then(function (response) {
-                            return response.data.intersects;
-                        });
-                    },
-
-                    getWaterTable: function (geometry, distance) {
-                        var flasher = flashService.add("Retrieving water table details...", 8000),
-                            wktStr = Exp.Util.toLineStringWkt(geometry);
-
-                        return httpData.post(waterTableUrl, {wkt: wktStr, count: diagonal, distance: distance}).then(function (response) {
-                            flashService.remove(flasher);
-                            return response.data;
-                        });
                     }
                 };
 
