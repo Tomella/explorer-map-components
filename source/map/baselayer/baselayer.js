@@ -16,7 +16,7 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 	return {
 		template : '<slider min="0" max="1" step="0.1" ng-model="slider.opacity" updateevent="slideStop"></slider>',
 		scope: {
-			maxZoom: "="
+			maxZoom: "=?12"
 		},
 		link : function(scope, element) {
 			if(typeof scope.maxZoom == "undefined") {

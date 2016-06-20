@@ -286,8 +286,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
             var elevdata = null;
             function showElevation(features) {
                 elevdata = features;
-                var values = propertiesMap.ELEVATION.values;
-                var cartoArray = [];
+                var distance, latLng, prevLatLng, values = propertiesMap.ELEVATION.values;
                 for(var i = 0; i < features.length; i++){
                     var coords = features[i].geometry.coordinates;
                     values.push({
@@ -296,15 +295,19 @@ angular.module('geo.chart.transect', ['geo.transect'])
                         z: coords[2]
                     });
 
-                    // cartoArray to calc surface distance
-//TODO                    cartoArray.push(viewerUtilsService.cartographicFromDegrees(coords[0], coords[1], coords[2]));
+                    latLng = L.latLng(coords[0], coords[1]);
+                    if (prevLatLng)
+                        distance += latLng.distanceTo(prevLatLng);
+                    else
+                        distance = 0;
+                    prevLatLng = latLng;
 
                     // for bisect lookup on mouseover
                     sortedXArray.push(coords[0]);
                 }
 
                 sortedXArray = sortedXArray.sort();
-                service.pathDistance = 0;//viewerUtilsService.cartographicArrayToSurfaceDistance(cartoArray);
+                service.pathDistance = distance;
                 service.pathDistance = $filter('length')(service.pathDistance, true);
                 x.domain([d3.min(values, getX), d3.max(values, getX)]);
 

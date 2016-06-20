@@ -45,7 +45,14 @@ angular.module('geo.maphelper', ['geo.map'])
         },
         addLayer:function(layer) {
             mapService.getMap().then(function(map) {
-                layer.addTo(map);
+                map.addLayer(layer);
+            });
+        },
+        addLayers:function(layers) {
+            mapService.getMap().then(function(map) {
+                layers.forEach(function(layer) {
+                    map.addLayer(layer);
+                });
             });
         },
         removeLayer:function(layer) {

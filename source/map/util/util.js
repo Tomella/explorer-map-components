@@ -10,6 +10,7 @@ if(!Exp.Util) {
 }
 
 Exp.Util.toGeoJSONFeature = toGeoJSONFeature;
+Exp.Util.toLineDistance = toLineDistance;
 Exp.Util.toLineStringWkt = toLineStringWkt;
 Exp.Util.intersects = intersects;
 Exp.Util.boundsToWktPoly = boundsToWktPoly;
@@ -208,12 +209,22 @@ function boundsToWktPoly(bounds) {
 	return "POLYGON((" + buffer.join(",") + "))";
 }
 
+function toLineDistance(latlngs) {
+    var i, dist = 0;
+    if(latlngs) {
+        for (i = latlngs.length; --i > 0; ) {
+            dist += latlngs[i].distanceTo(latlngs[i - 1]);
+        }
+    }
+    return dist;
+}
+
 function toLineStringWkt(latlngs) {
     var lng, lat, coords = [];
     if(latlngs) {
-    	latlngs.forEach(function(latlng) {
-    	   	coords.push(latlng.lng + " " + latlng.lat);
-    	});
+        latlngs.forEach(function(latlng) {
+            coords.push(latlng.lng + " " + latlng.lat);
+        });
     }
     return "LINESTRING(" + coords.join(",") + ")";
 }

@@ -10,6 +10,7 @@ if(!Exp.Util) {
 }
 
 Exp.Util.toGeoJSONFeature = toGeoJSONFeature;
+Exp.Util.toLineDistance = toLineDistance;
 Exp.Util.toLineStringWkt = toLineStringWkt;
 Exp.Util.intersects = intersects;
 Exp.Util.boundsToWktPoly = boundsToWktPoly;
@@ -208,12 +209,22 @@ function boundsToWktPoly(bounds) {
 	return "POLYGON((" + buffer.join(",") + "))";
 }
 
+function toLineDistance(latlngs) {
+    var i, dist = 0;
+    if(latlngs) {
+        for (i = latlngs.length; --i > 0; ) {
+            dist += latlngs[i].distanceTo(latlngs[i - 1]);
+        }
+    }
+    return dist;
+}
+
 function toLineStringWkt(latlngs) {
     var lng, lat, coords = [];
     if(latlngs) {
-    	latlngs.forEach(function(latlng) {
-    	   	coords.push(latlng.lng + " " + latlng.lat);
-    	});
+        latlngs.forEach(function(latlng) {
+            coords.push(latlng.lng + " " + latlng.lat);
+        });
     }
     return "LINESTRING(" + coords.join(",") + ")";
 }
@@ -944,7 +955,7 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstr
 	return {
 		template : '<slider min="0" max="1" step="0.1" ng-model="slider.opacity" updateevent="slideStop"></slider>',
 		scope: {
-			maxZoom: "="
+			maxZoom: "=?12"
 		},
 		link : function(scope, element) {
 			if(typeof scope.maxZoom == "undefined") {
@@ -1375,8 +1386,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
             var elevdata = null;
             function showElevation(features) {
                 elevdata = features;
-                var values = propertiesMap.ELEVATION.values;
-                var cartoArray = [];
+                var distance, latLng, prevLatLng, values = propertiesMap.ELEVATION.values;
                 for(var i = 0; i < features.length; i++){
                     var coords = features[i].geometry.coordinates;
                     values.push({
@@ -1385,15 +1395,19 @@ angular.module('geo.chart.transect', ['geo.transect'])
                         z: coords[2]
                     });
 
-                    // cartoArray to calc surface distance
-//TODO                    cartoArray.push(viewerUtilsService.cartographicFromDegrees(coords[0], coords[1], coords[2]));
+                    latLng = L.latLng(coords[0], coords[1]);
+                    if (prevLatLng)
+                        distance += latLng.distanceTo(prevLatLng);
+                    else
+                        distance = 0;
+                    prevLatLng = latLng;
 
                     // for bisect lookup on mouseover
                     sortedXArray.push(coords[0]);
                 }
 
                 sortedXArray = sortedXArray.sort();
-                service.pathDistance = 0;//viewerUtilsService.cartographicArrayToSurfaceDistance(cartoArray);
+                service.pathDistance = distance;
                 service.pathDistance = $filter('length')(service.pathDistance, true);
                 x.domain([d3.min(values, getX), d3.max(values, getX)]);
 
@@ -2242,6 +2256,115 @@ angular.module("geo.extent", [])
 
 })(angular, L);
 
+(function (angular, google, window) {
+
+'use strict';
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+			
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");							
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+				
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+							
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}		
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode'] 
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;   
+		}
+	};
+}]);
+
+}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2473,115 +2596,6 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
-(function (angular, google, window) {
-
-'use strict';
-
-angular.module('geo.geosearch', ['ngAutocomplete'])
-
-.directive("expSearch", [function() {
-	return {
-		templateUrl : "components/geosearch/search.html",
-		scope : {
-			hideTo:"="
-		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
-			
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-				
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-							
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}		
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
-			});
-			return deferred.promise;   
-		}
-	};
-}]);
-
-}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2842,6 +2856,752 @@ angular.module("explorer.layer.slider", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function (angular, L) {
+    'use strict';
+
+    var leastCostPathExtent;
+
+    angular.module("explorer.least.cost.path", [
+        'explorer.config',
+        'explorer.flasher',
+        'explorer.persist',
+        'explorer.message'])
+
+        .directive("leastCostPathDraw", ['$log', 'lcpService', 'flashService', 'persistService', 'configService',
+            function($log, lcpService, flashService, persistService, configService) {
+                return {
+                    templateUrl:'map/leastCostPath/draw.html',
+                    replace:true,
+                    restrict:"AE",
+                    controller:['$scope', '$rootScope', function($scope, $rootScope) {
+                        $scope.points = [];
+
+                        configService.getConfig().then(function(config){
+                            leastCostPathExtent = config.leastCostPathExtent;
+                        });
+
+                        $scope.remove = function() {
+                            var index = $scope.points.indexOf(this.point);
+                            if (index > -1) {
+                                $scope.points.splice(index, 1);
+                                lcpService.removePoint(this.point);
+                            }
+                        };
+
+                        var isPathCompleteEvent = false;
+                        $scope.pathComplete = function() {
+                            isPathCompleteEvent = true;
+                            $rootScope.$broadcast("leastCost.path.data", null);
+                            isPathCompleteEvent = false;
+                            $scope.pathGeometry = lcpService.getPathGeometry();
+                            if($scope.lastResistanceCategories) {
+                                // This way we preserve the last entered weightings.
+                                $scope.resistanceCategories = $scope.lastResistanceCategories;
+                            } else {
+                                // Alternatively retrieve them from the service.
+                                lcpService.weightings().then(function(weightObj) {
+                                    // Merge in those from previous sessions.
+                                    persistService.getItem("lcpWeightings").then(function(weightings) {
+                                        if(weightings) {
+                                            weightObj.forEach(function(category) {
+                                                category.group.forEach(function(child) {
+                                                    var matched = weightings[child.key];
+                                                    if(matched || matched === 0) {
+                                                        child.value = matched.value;
+                                                        child.selected = matched.selected;
+                                                    }
+                                                });
+                                            });
+                                        }
+                                    });
+                                    $scope.resistanceCategories = weightObj;
+                                });
+                            }
+                        };
+
+                        $rootScope.$on("leastCost.path.draw", function (event) {
+                            $scope.show = true;
+                            $scope.points = [];
+                        });
+
+                        $rootScope.$on("leastCost.path.data", function (event, entity) {
+                            if (isPathCompleteEvent) return;
+                            if (entity && entity.positions && entity.positions.length) {
+                                $scope.show = true;
+                                $scope.points = entity.positions;
+                                $scope.distance = entity.length;
+                                lcpService.setPathGeometry(entity.positions);
+                            } else {
+                                $scope.show = false;
+                                $scope.points = [];
+                                $scope.distance = 0;
+                                lcpService.reset();
+                            }
+                        });
+
+                        // Here is where we persist state..
+                        $scope.$watch("resistanceCategories", function(newValue, oldValue){
+                            if(oldValue) {
+                                if (!newValue) $scope.show = false; // weightings dialog dismissed
+                                $scope.lastResistanceCategories = oldValue;
+                                var savedKeys = {};
+                                oldValue.forEach(function(category) {
+                                    category.group.forEach(function(child) {
+                                        savedKeys[child.key] = {
+                                            value :child.value,
+                                            selected:child.selected
+                                        };
+                                    });
+                                });
+                                persistService.setItem("lcpWeightings", savedKeys);
+                            }
+                        });
+                    }]
+                };
+            }])
+
+        .directive("leastCostWeightings", ['$log', '$modal', 'lcpService', 'messageService',
+            function($log, $modal, lcpService, messageService) {
+            return {
+                scope: {
+                    weightings : "=",
+                    pathGeometry : "="
+                },
+                controller:[function() {
+
+                }],
+                link:function(scope, element, attrs) {
+                    var modalInstance;
+
+                    scope.$watch("weightings", function(newValue, oldValue) {
+                        if(newValue) {
+
+                            modalInstance = $modal.open({
+                                templateUrl : "map/leastCostPath/leastCostWeightings.html",
+                                size:"md",
+                                backdrop:'static',
+                                controller : ['$scope', '$rootScope', '$modalInstance', 'weightings', 'pathGeometry',
+                                    function($scope, $rootScope, $modalInstance, weightings, pathGeometry) {
+                                    $scope.weightings = weightings;
+                                    $scope.pathGeometry = pathGeometry;
+
+                                    // Show the panel
+                                    determineBufferRange();
+
+                                    $scope.close = function() {
+                                        $scope.weightings = null;
+                                    };
+
+                                    $scope.cancelLeastCostPath = function() {
+                                        $scope.weightings = null;
+                                        $modalInstance.dismiss(null);
+                                    };
+
+                                    $scope.showLeastCostPath = function(event) {
+                                        event.stopPropagation();
+                                        $modalInstance.close($scope.bufferPercent);
+                                    };
+
+                                    function determineBufferRange() {
+                                        var lbounds = L.polyline($scope.pathGeometry).getBounds(),
+                                            bounds = {
+                                               right: lbounds.getEast(),
+                                               left: lbounds.getWest(),
+                                               top: lbounds.getNorth(),
+                                               bottom: lbounds.getSouth()
+                                            },
+                                            bufferValues = {"0":0},
+                                            bufferPercent = "0",
+                                            restrictionMessage = null;
+
+                                        if(inBounds(0.1)) {
+                                            bufferValues[bufferPercent = "0.1"] = 10;
+                                            if(inBounds(0.25)) {
+                                                bufferValues[bufferPercent = "0.25"] = 25;
+                                                if(inBounds(0.5))
+                                                    bufferValues[bufferPercent = "0.5"] = 50;
+                                                else
+                                                    restrictionMessage = "Can not buffer extent by more than 25% as it would exceed the extent of our data";
+                                            } else {
+                                                restrictionMessage = "Can not buffer extent by more than 10% as it would exceed the extent of our data";
+                                            }
+                                        } else {
+                                            restrictionMessage = "Extent buffering restricted to line extent due to lack of data";
+                                        }
+
+                                        $scope.bufferValues = bufferValues; 		// {"0":0, "0.1":10, "0.25":25, "0.50":50};
+                                        $scope.bufferPercent = bufferPercent; 	// "0.25";
+                                        if(restrictionMessage) {
+                                            messageService.info(restrictionMessage);
+                                        }
+
+                                        function inBounds(bufferPercent) {
+                                            var xBuff = (bounds.right - bounds.left) * bufferPercent,
+                                                yBuff = (bounds.top - bounds.bottom) * bufferPercent,
+                                                buff  = xBuff > yBuff? xBuff : yBuff,
+                                                left = bounds.left - buff,
+                                                right = bounds.right + buff,
+                                                bottom = bounds.bottom - buff,
+                                                top = bounds.top + buff;
+
+                                            return leastCostPathExtent.top > top &&
+                                                leastCostPathExtent.left < left &&
+                                                leastCostPathExtent.right > right &&
+                                                leastCostPathExtent.bottom < bottom;
+                                        }
+                                    }
+                                }],
+                                resolve: {
+                                    weightings : function() {
+                                        return scope.weightings;
+                                    },
+                                    pathGeometry : function() {
+                                        return scope.pathGeometry;
+                                    }
+                                }
+                            });
+
+                            modalInstance.result.then(function (bufferPercent) {
+                                processSelections(scope.weightings, scope.pathGeometry, bufferPercent);
+                                closed();
+                            }, function () {
+                                closed();
+                            });
+
+                        }
+
+                        function processSelections(selectedWeightings, geometry, bufferPercent) {
+                            var weightings = {};
+
+                            // Normalise what we send the service. It doesn't need know about our structure.
+                            selectedWeightings.forEach(function(resistance) {
+                                resistance.group.forEach(function(item) {
+                                    weightings[item.key] = item;
+                                });
+                            });
+                            lcpService.getLeastCostPath(geometry, weightings, (bufferPercent === 0 || bufferPercent?bufferPercent:0.25)).then(function(response) {
+                                lcpService.reset();
+                                if (!response) {
+                                    failed({
+                                        text: "Least cost path request failed."
+                                    });
+                                } else if(response.jobName == "displayMessage" || response.error) {
+                                    if(!response.text) response.text = response.details;
+                                    failed(response);
+                                    scope.leastCostPath = null;
+                                } else {
+                                    var results = lcpService.results();
+                                    results.data = response.data;
+                                    results.data.geometry = geometry;
+                                    results.distance = Exp.Util.toLineDistance(geometry);
+                                    results.data.timeStamp = Date.now();
+                                }
+                            }, failed);
+                        }
+
+                    });
+
+                    function failed(message) {
+                        messageService.error(message.text);
+                    }
+
+                    function closed() {
+                        scope.weightings = null;
+                    }
+                }
+            };
+        }])
+
+        .directive("expLeastCostPathDisplay", ['$log', 'lcpService', '$filter', function($log, lcpService, $filter) {
+            return {
+                templateUrl : "map/leastCostPath/leastCostDisplay.html",
+                restrict:"AE",
+                controller : ['$scope', function($scope) {
+                    $scope.results = lcpService.results();
+
+                    $scope.urls = {};
+
+                    $scope.$watch("results.data", function(data) {
+                        if(data) {
+                            // Clear showing flags.
+                            $scope.lcpKmlShown = $scope.lcpBufferKmlShown = $scope.pathShown = $scope.costSurfaceShown = false;
+                            angular.forEach(data.results, function(value, key) {
+                                lcpService.getResourceUrl(data.jobId, key).then(function(url) {
+                                    $scope.urls[key] = url;
+                                    if(key == "lcpKml") {
+                                        $scope.lcpKmlShown = true;
+                                        lcpService.showPathKml(url);
+                                    } else if(key == "lcpCorridorKml") {
+                                        $scope.lcpBufferKmlShown = true;
+                                        lcpService.showBufferKml(url);
+                                    }
+                                });
+                            });
+                        }
+                    });
+
+                    $scope.clear = function() {
+                        $scope.results.data = $scope.results.distance = null;
+                    };
+
+                    $scope.stringify = function(what) {
+                        if(what) {
+                            return JSON.stringify(what);
+                        }
+                    };
+
+                    $scope.bringToTop = function() {
+                        lcpService.bringToTop();
+                    };
+
+                    $scope.zoomToCentre = function() {
+                        lcpService.zoomToBufferlLayer();
+                    };
+
+                    $scope.toggleLcpKml = function() {
+                        $scope.lcpKmlShown = lcpService.togglePathKml($scope.urls.lcpKml);
+                    };
+
+                    $scope.toggleLcpBufferKml = function() {
+                        $scope.lcpBufferKmlShown = lcpService.toggleBufferKml($scope.urls.lcpCorridorKml);
+                    };
+
+                    $scope.togglePath = function() {
+                        $scope.pathShown = lcpService.toggleLcpSourcePath($scope.results.data.geometry, "Least cost path elevation plot");
+                    };
+
+                    $scope.elevationLcpKml = function() {
+                        lcpService.elevationLcpKml();
+                    };
+
+                    $scope.elevationPath = function(label) {
+                        lcpService.elevationPath($scope.results.data.geometry, "Elevation plot of original path for least cost path");
+                    };
+
+                    $scope.toggleCostSurface = function() {
+                        $scope.costSurfaceShown = lcpService.toggleCostSurface({
+                            outline: $scope.urls.fullSegExtKml,
+                            image: $scope.urls.png,
+                            extent: $scope.urls.csExtKml
+                        });
+                    };
+                }],
+                link : function(scope, element, attrs) {
+                    scope.$watch("results.distance", function(newValue, oldValue) {
+                        if(newValue) {
+                            scope.pathShown = true;
+                            lcpService.showLcpSourcePath(scope.results.data.geometry);
+                        } else if(oldValue) {
+                            lcpService.reset();
+                        }
+                    });
+                }
+            };
+        }])
+
+        .directive("pathLeastCostSlider", [function() {
+            return {
+                template : '<slider min="0" max="1" step="0.1" ng-model="weighting.value" updateevent="slideStop" ng-disabled="!weighting.selected" ui-tooltip="hide"></slider>',
+                link : function() {}
+            };
+        }])
+
+        .factory('lcpService', ['$log', '$q', 'httpData', '$timeout', '$rootScope', 'mapHelper', 'flashService',
+            function($log, $q, httpData, $timeout, $rootScope, mapHelper, flashService) {
+                var pathGeometry;
+
+                var leastCostPathJob = "leastCostPath",
+                    layers = {
+                        pathBuffersKmlLayer:null,
+                        imageLayer:null,
+                        bufferKmlLayer:null,
+                        lcpSourcePath:null,
+                        pathKmlLayer:null
+                    },
+                    layerIndexes = [
+                        "pathBuffersKmlLayer",
+                        "imageLayer",
+                        "bufferKmlLayer",
+                        "lcpSourcePath",
+                        "pathKmlLayer"
+                    ],
+                    bufferExtent = null,
+                    notificationFlash = null,
+                    interimPath = null,
+                    lcpResults = {
+                        data: null,
+                        distance: null
+                    };
+
+                function isShowingLayer(name) {
+                    var layer = layers[name];
+                    return layer !== undefined && layer !== null;
+                }
+
+                function removeLayer(name) {
+                    var layer = layers[name];
+                    if(layer) {
+                        mapHelper.removeLayer(layer);
+                        layers[name] = null;
+                    }
+                }
+
+                function renderPaths() {
+                    var nonNullLayers = [];
+
+                    layerIndexes.forEach(function(layerName) {
+                        var layer = layers[layerName];
+                        if(layer) {
+                            nonNullLayers.push(layer);
+                            mapHelper.removeLayer(layer);
+                        }
+                    });
+
+                    mapHelper.addLayers(nonNullLayers);
+                }
+
+                function showInterimPath() {
+                     if (interimPath) mapHelper.removeLayer(interimPath);
+                     mapHelper.addLayer(interimPath = L.polyline(pathGeometry, {
+                         width: 2,
+                         color: '#000',
+                     }));
+                }
+
+                return {
+                    results : function() {
+                        return lcpResults;
+                    },
+
+                    reset: function() {
+                        lcpResults.data = pathGeometry = null;
+                        this.removePathKml();
+                        this.removeBufferKml();
+                        this.removeLcpSourcePath();
+                        this.removePathBuffers();
+                        this.removeCostSurface();
+                        if (interimPath) {
+                            mapHelper.removeLayer(interimPath);
+                            interimPath = null;
+                        }
+                    },
+
+                    triggerElevationPlot : function(data) {
+                        $rootScope.$broadcast("elevation.plot.data", data);
+                    },
+
+                    elevationPath : function(geometry, label) {
+                        var length = Exp.Util.toLineDistance(geometry);
+                        this.triggerElevationPlot({length:length, positions:geometry, heading:label});
+                    },
+
+                    elevationLcpKml : function() {
+                        var positions = layers.pathKmlLayer.getLatLngs();
+                        var distance = Exp.Util.toLineDistance(positions);
+                        this.triggerElevationPlot({length:distance, positions:positions, heading:"Least cost path elevation plot"});
+                    },
+
+                    bringToTop : function() {
+                        renderPaths();
+                    },
+
+                    removeLcpSourcePath : function() {
+                        removeLayer("lcpSourcePath");
+                    },
+
+                    removeBufferKml : function() {
+                        removeLayer("bufferKmlLayer");
+                    },
+
+                    removeCostSurface : function() {
+                        removeLayer("imageLayer");
+                    },
+
+                    removePathBuffers : function() {
+                        removeLayer("pathBuffersKmlLayer");
+                    },
+
+                    removePathKml : function() {
+                        removeLayer("pathKmlLayer");
+                    },
+
+                    zoomToBufferlLayer : function() {
+                        // Use the first in the list of entitiesDS
+                        layerIndexes.some(function(name) {
+                            var layer = layers[name];
+                            if(layer) {
+                                mapHelper.zoomToBounds(layer.getBounds());
+                                return true;
+                            }
+                            return false;
+                        });
+                    },
+
+                    toggleLcpSourcePath : function(geometry) {
+                        var showing = isShowingLayer("lcpSourcePath");
+                        if(showing) {
+                            this.removeLcpSourcePath();
+                        } else {
+                            this.showLcpSourcePath(geometry);
+                        }
+                        return !showing;
+                    },
+
+                    showLcpSourcePath : function(geometry) {
+                        this.removeLcpSourcePath();
+                        layers.lcpSourcePath = L.polyline(geometry, {
+                            width: 2,
+                            color: '#000',
+                        });
+                        renderPaths();
+                    },
+
+                    toggleCostSurface : function(imageExtent) {
+                        var showing = isShowingLayer("imageLayer");
+                        if(showing) {
+                            this.removeCostSurface();
+                            this.removePathBuffers();
+                        } else {
+                            this.showCostSurface(imageExtent);
+                        }
+                        return !showing;
+                    },
+
+                    showCostSurface : function( imageExtent) {
+                        this.removeCostSurface();
+                        // We render the outline first
+                        this.showPathBuffers(imageExtent.outline).then(function() {
+                            new L.KML(imageExtent.extent, { async: true }).on("loaded", function(e) {
+                                layers.imageLayer = L.imageOverlay(imageExtent.image, e.target.getBounds(), {
+                                    opacity: 0.7
+                                });
+                                renderPaths();
+                            });
+                        });
+                    },
+
+                    showPathBuffers : function(url) {
+                        var deferred = $q.defer();
+                        this.removePathBuffers();
+                        layers.pathBuffersKmlLayer = new L.KML(url, { async: true });
+                        layers.pathBuffersKmlLayer.on("loaded", function(e) {
+                            e.target.setStyle({
+                               width: 2,
+                                color: "#44ee11",
+                                fillColor: "#ccff77",
+                                fillOpacity: 0.15
+                            });
+                            deferred.resolve(e.target);
+                        });
+                        return deferred.promise;
+                    },
+
+                    toggleBufferKml : function(url) {
+                        var showing = isShowingLayer("bufferKmlLayer");
+                        if(showing) {
+                            this.removeBufferKml();
+                        } else {
+                            this.showBufferKml(url);
+                        }
+                        return !showing;
+                    },
+
+                    showBufferKml : function(url) {
+                        this.removeBufferKml();
+                        layers.bufferKmlLayer = new L.KML(url, { async: true });
+                        layers.bufferKmlLayer.on("loaded", function(e) {
+                            e.target.setStyle({
+                                width: 2,
+                                color: "#ff4411",
+                                fillColor: "#bbff55",
+                                fillOpacity: 0.3
+                            });
+                        });
+                        renderPaths();
+                    },
+
+                    togglePathKml : function(url) {
+                        var showing = isShowingLayer("pathKmlLayer");
+                        if(showing) {
+                            this.removePathKml();
+                        } else {
+                            this.showPathKml(url);
+                        }
+                        return !showing;
+                    },
+
+                    showPathKml : function(url) {
+                        this.removePathKml();
+                        layers.pathKmlLayer = new L.KML(url, { async: true });
+                        layers.pathKmlLayer.on("loaded", function(e) {
+                            e.target.setStyle({
+                                width: 2,
+                                color: "#ff9933",
+                                fillColor: "ffcc66",
+                                fillOpacity: 0.5
+                            });
+                        });
+                        renderPaths();
+                    },
+
+                    getResourceUrl : function(jobId, param) {
+                        var deferred = $q.defer();
+                        httpData.get("service/proxied/lcpService/jobs/" + jobId + "/results/" + param + "?f=json").then(function(response) {
+                            if(response.data && response.data.value) {
+                                deferred.resolve(response.data.value.url);
+                            }
+                            deferred.reject();
+                        });
+                        return deferred.promise;
+                    },
+
+                    getLeastCostPath : function(geometry, weightings, bufferPercent) {
+                        var wktStr = Exp.Util.toLineStringWkt(geometry),
+                            deferred = $q.defer(),
+                            weightArray = [],
+                            complete = false;
+
+                        showInterimPath();
+                        flashService.add("Initiating least cost path process...", 3000);
+
+                        $timeout(function() {
+                            if(!complete) {
+                                notificationFlash = flashService.add("Least cost path process is running.", 120000, true);
+                            }
+                        }, 4500);
+
+                        // We have to send the data as urlencoded parameters instead of JSON <doh/>
+                        angular.forEach(weightings, function(item, key) {
+                            if(item.selected) {
+                                weightArray.push('["' + key + '","' + item.label + '",' + item.value + "]");
+                            }
+                        });
+
+                        httpData.get("service/proxied/lcpService/submitJob", {
+                            params: {
+                                wkt : wktStr,
+                                wTable : "[" + weightArray.join() + "]",
+                                f : 'json',
+                                buffPct:bufferPercent,
+                                returnZ : false,
+                                returnM : false
+                            }
+                        }).then(function(response) {
+                            var jobId = response.data.jobId, count = 0;
+
+                            $timeout(poll, 12000);
+
+                            function poll() {
+                                count++;
+                                httpData.get("service/proxied/lcpService/jobs/" + jobId + "?f=json").then(function(message) {
+                                    var status = message.data.jobStatus;
+                                    if(status == "esriJobSucceeded" || status == "esriJobFailed") {
+                                        var screenMessage = "A least cost process has completed";
+                                        if(message.data && message.data.jobStatus == "esriJobFailed") {
+                                            screenMessage = "A least cost process has failed";
+                                        }
+                                        complete = true;
+                                        flashService.remove(notificationFlash);
+                                        flashService.add(screenMessage, 4000);
+
+                                        deferred.resolve(message);
+                                    } else if(count++ < 100 ) {
+                                        $timeout(poll, 4000);
+                                    }
+                                });
+                            }
+                        });
+                        return deferred.promise;
+                    },
+
+                    getPathGeometry : function() {
+                        return pathGeometry;
+                    },
+
+                    setPathGeometry : function(geometry) {
+                        pathGeometry = geometry;
+                    },
+
+                    weightings : function() {
+                        var deferred = $q.defer();
+
+                        httpData.get("resources/config/defaultLeastCostPathWeightings.json", {cache:true}).then(function(response) {
+                                deferred.resolve(response.data);
+                            },
+                            function(err) {
+                                deferred.reject({error:"E1100", text :"Failed to retrieve weightings"});
+                            });
+                        return deferred.promise;
+                    }
+                };
+            }])
+
+        .run(["$templateCache", function($templateCache) {
+            $templateCache.put("map/leastCostPath/draw.html",
+                    '<div class="popover bottom lcpPathDisplay" mars-lcp-path ng-show="show || resistanceCategories">' +
+                    '	<div class="arrow"></div>' +
+                    '	<div class="popover-inner">' +
+                    '		<div class="pathHeader">' +
+                    '			<span style="font-weight:bold">Least Cost Path</span><div style="float:right" ng-show="distance">{{(distance/1000) | number : 3}}km</div>' +
+                    '		</div>' +
+                    '       <div ng-hide="resistanceCategories">' +
+                    '		   <div ng-show="points.length == 0">Click on map to start path. Double click to end path.</div>' +
+                    '		   <div ng-show="points.length > 0">Drag vertices with mouse to change waypoints. Hover over waypoints and use the delete key to remove.</div>' +
+                    '		   <div style="font-weight:bold;text-align:center" ng-cloak ng-show="distance > 300000">Reduce the length of your path. <br/>A limit of 300k applies.</div>' +
+                    '		   <div class="buttons">' +
+                    '			  <button ng-show="points.length > 1" type="button" class="btn btn-default" style="width:98%;margin:2px" ng-click="pathComplete($event)" ng-disabled="distance > 300000">Least cost path...</button>' +
+                    '		   </div>' +
+                    '       </div>' +
+                    '	</div>' +
+                    '	<div least-cost-weightings weightings="resistanceCategories" path-geometry="pathGeometry" class="expWeightings" success="disable"></div>' +
+                    '</div>');
+        }])
+
+        .filter('lcpLookup', [function() {
+            // We use this to map to nice names on the UI for a given parameter name from ArcGIS least cost path service.
+            var lookup = {
+                "lcpKml" : {
+                    name: "Least cost path KML",
+                        fileType : "kml",
+                        fileName : "lcp.kml",
+                        showInGoogle : false
+                },
+                "lcpCorridorKml" : {
+                    name: "Least cost path buffer KML",
+                        fileType : "kml",
+                        fileName : "lcpCorridor.kml",
+                        showInGoogle : false
+                },
+                "cRasterKmz" : {
+                    name: "Cost surface KML",
+                        fileType : "kmz",
+                        fileName : "costRaster.kmz",
+                        showInGoogle : false
+                },
+                "combinedKMZ" : {
+                    name: "Combined KMZ",
+                        fileType : "kmz",
+                        fileName : "combinedKMZ",
+                        showInGoogle : true
+                },
+                "docPath" : {
+                    name: "Least cost path report",
+                        fileType : "pdf",
+                        fileName : "lcpReport.pdf",
+                        showInGoogle : true
+                }
+            };
+            return function(key, type) {
+                var value = lookup[key];
+                return (value || { name : key,	fileType: ""})[type || "name"];
+            };
+        }]);
+
+
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 
 (function (angular, window, L) {
 
@@ -2886,7 +3646,14 @@ angular.module('geo.maphelper', ['geo.map'])
         },
         addLayer:function(layer) {
             mapService.getMap().then(function(map) {
-                layer.addTo(map);
+                map.addLayer(layer);
+            });
+        },
+        addLayers:function(layers) {
+            mapService.getMap().then(function(map) {
+                layers.forEach(function(layer) {
+                    map.addLayer(layer);
+                });
             });
         },
         removeLayer:function(layer) {
@@ -3011,106 +3778,6 @@ angular.module("geo.measure", [])
 }]);
 
 })(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(angular, L) {
-
-'use strict';
-
-angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'explorer.message'])
-
-.directive("geoPath", ['mapService', 'pathService', '$rootScope', 'flashService', 'messageService', 'configService', '$timeout', '$q',
-                              function(mapService, pathService, $rootScope, flashService, messageService, configService, $timeout, $q) {
-	var KEY = "distance",
-		plotter;
-	
-	return {
-		controller:['$scope', function($scope) {
-			$scope.name = "PATH";
-			
-		}],
-		link :function(scope, element, attrs) {
-			scope.distanceMeasure = {
-					distance:"-"
-			};
-			
-			
-			// Set up some methods to get data
-			scope.showElevation = function() {
-				var points = plotter.getLatLngs();
-				
-				
-				var geometry = mapService.getDistanceGeometry(),
-					distance = geometry.clone().transform(EPSG3857, EPSG4326).getGeodesicLength();
-
-				scope.disable();
-				pathService.triggerElevationPlot({length:distance, geometry:geometry});
-			};
-			
-			scope.disable = function() {
-				scope.item = "";
-				closeHandler();
-			};
-			
-			scope.$watch("item", function(newValue, oldValue) {
-				if(newValue == KEY) {
-					flashService.add("Click on map to start a path or add next point. Double click to end path.", 4000);
-					mapService.getMap().then(function(map) {
-						plotter = L.Polyline.Plotter([], {weight:4});
-						plotter.addTo(map);
-					});
-				} else if(oldValue == KEY) {
-					closeHandler();					
-				}
-			});
-			
-			function closeHandler() {
-				mapService.getMap().then(function(map) {
-					map.removeLayer(plotter);
-				});
-			}
-		}
-	};
-}])
-
-.factory("pathService", ['$rootScope', function($rootScope) {
-	return {
-		triggerElevationPlot : function(data) {
-			$rootScope.$broadcast("elevation.plot.data", data);
-		}
-	};
-}])
-
-.filter('length', ['$filter', function($filter) {
-	// Nice representation of length for the UI.
-	var map = {units: "m", threshold: 100000, aboveThresholdUnits: "km", divideBy: 1000};
-
-	return function(length, free) {
-		var units, buffer;
-		
-		if(!length && length !== 0) {
-			return null;
-		}
-		
-		if(map.threshold && length > map.threshold) {
-			length = length / map.divideBy;
-			units = map.aboveThresholdUnits;
-		} else {
-			units = map.units;
-		}
-		
-		buffer = $filter("number")(length, 0) + " " + units;
-		if(free) {
-			return buffer;
-		}
-		return "(" + buffer + ")";
-	};
-}]);
-
-
-})(angular, L);
 (function () {
 
     "use strict";
@@ -3943,6 +4610,106 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+
+(function(angular, L) {
+
+'use strict';
+
+angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'explorer.message'])
+
+.directive("geoPath", ['mapService', 'pathService', '$rootScope', 'flashService', 'messageService', 'configService', '$timeout', '$q',
+                              function(mapService, pathService, $rootScope, flashService, messageService, configService, $timeout, $q) {
+	var KEY = "distance",
+		plotter;
+	
+	return {
+		controller:['$scope', function($scope) {
+			$scope.name = "PATH";
+			
+		}],
+		link :function(scope, element, attrs) {
+			scope.distanceMeasure = {
+					distance:"-"
+			};
+			
+			
+			// Set up some methods to get data
+			scope.showElevation = function() {
+				var points = plotter.getLatLngs();
+				
+				
+				var geometry = mapService.getDistanceGeometry(),
+					distance = geometry.clone().transform(EPSG3857, EPSG4326).getGeodesicLength();
+
+				scope.disable();
+				pathService.triggerElevationPlot({length:distance, geometry:geometry});
+			};
+			
+			scope.disable = function() {
+				scope.item = "";
+				closeHandler();
+			};
+			
+			scope.$watch("item", function(newValue, oldValue) {
+				if(newValue == KEY) {
+					flashService.add("Click on map to start a path or add next point. Double click to end path.", 4000);
+					mapService.getMap().then(function(map) {
+						plotter = L.Polyline.Plotter([], {weight:4});
+						plotter.addTo(map);
+					});
+				} else if(oldValue == KEY) {
+					closeHandler();					
+				}
+			});
+			
+			function closeHandler() {
+				mapService.getMap().then(function(map) {
+					map.removeLayer(plotter);
+				});
+			}
+		}
+	};
+}])
+
+.factory("pathService", ['$rootScope', function($rootScope) {
+	return {
+		triggerElevationPlot : function(data) {
+			$rootScope.$broadcast("elevation.plot.data", data);
+		}
+	};
+}])
+
+.filter('length', ['$filter', function($filter) {
+	// Nice representation of length for the UI.
+	var map = {units: "m", threshold: 100000, aboveThresholdUnits: "km", divideBy: 1000};
+
+	return function(length, free) {
+		var units, buffer;
+		
+		if(!length && length !== 0) {
+			return null;
+		}
+		
+		if(map.threshold && length > map.threshold) {
+			length = length / map.divideBy;
+			units = map.aboveThresholdUnits;
+		} else {
+			units = map.units;
+		}
+		
+		buffer = $filter("number")(length, 0) + " " + units;
+		if(free) {
+			return buffer;
+		}
+		return "(" + buffer + ")";
+	};
+}]);
+
+
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 (function(angular, L, window) {
 'use strict';
 
@@ -4478,7 +5245,7 @@ function OverFeatureCtrl($filter, pointService) {
         };
     }
 
-    angular.module("geo.transect", ['explorer.config','explorer.feature.summary','explorer.flasher'])
+    angular.module("geo.transect", ['explorer.config','explorer.feature.summary','explorer.flasher','geo.path'])
 
         .provider("transectService", function() {
             var diagonal = 500,
@@ -5440,4 +6207,6 @@ $templateCache.put("map/elevation/elevation.html","<div class=\"container-full e
 $templateCache.put("map/elevation/elevationInfo.html","<div>\r\nThe elevation graph is calculated from the 3\" DEM data. \r\nThe data is held in a grid with a cell size of approx. 90 m. \r\nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \r\n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\r\n<br/>\r\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \r\nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \r\nwater table appear above the elevation of the surface on occasions. \r\nData availability will be indicated by the button labelled \"Show Water Table\". \r\n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\r\n</div>\r\n");
 $templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\r\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\r\n		<div class=\"pathContent\">\r\n			<div ng-repeat=\"(key, feature) in features.data\">\r\n				{{mappings[key].title}}  ({{feature}})\r\n			</div>\r\n			<div ng-hide=\"features.count\">No nearby features</div>\r\n		</div>\r\n	</div>\r\n</div>\r\n");
 $templateCache.put("map/layerinspector/layerInspector.html","<div class=\"interactionPanel\">\r\n	<div class=\"exp-block\" ng-show=\"active\" style=\"height:100%\">\r\n		<div class=\"exp-header\">\r\n			<div class=\"interactionPanelHeader\" ng-hide=\"hidename\">\r\n				<a href=\"javascript:;\" ng-click=\"click()\" ng-show=\"showClose\" title=\"Name is {{name || active.name}}\">{{name || active.name}}</a>\r\n				<span ng-hide=\"showClose\">{{name || active.name}}</span>\r\n			</div>\r\n			<div style=\"float:right\">\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\" \r\n						ng-click=\"toggleShow(active)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!active.displayed), \'fa-eye\':active.displayed}\"></i></a>\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Collapse extra information\" ng-show=\"showClose\"\r\n						ng-click=\"click()\"><i class=\"fa fa-caret-square-o-up\"></i></a>\r\n			</div>\r\n		</div>\r\n		<div>\r\n			<div class=\"thumbNailContainer\" ng-show=\"active.thumbUrl\">\r\n				<img width=\"100\" ng-src=\"{{active.thumbUrl}}\" class=\"img-thumbnail\" alt=\"{{active.description}}\"></img>\r\n			</div>\r\n			<strong>Opacity</strong><br/>\r\n			<span explorer-layer-slider layer=\"active.layer\" title=\"Change the opacity of the selected layer when shown on the map\" class=\"opacitySlider\"></span>\r\n			<p/>\r\n			{{active.description}}\r\n		</div> \r\n	</div>\r\n</div>");
+$templateCache.put("map/leastCostPath/leastCostDisplay.html","\r\n<exp-modal is-open=\"results.data\" style=\"position:fixed;top:132px;left:42px\" title=\"Least cost path control panel\" on-close=\"clear()\">\r\n    <div ng-if=\"results.data.jobStatus != \'esriJobFailed\'\" class=\"esriLcpSuccess\">\r\n        <div>\r\n            <div>\r\n                <div style=\"float:left;font-zize:120%; font-weight:bold; padding:5px;\">View...</div>\r\n                <div style=\"float:right\">\r\n                    <a class=\"featureLink\" href=\"javascript:;\" title=\"Bring least cost path layers to the top of the map.\"\r\n                       ng-click=\"bringToTop()\"><i class=\"fa fa-arrow-up\"></i> </a>\r\n                </div>\r\n                <div ng-mouseenter=\"mouseenterPath()\" ng-mouseleave=\"mouseleavePath()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Original drawn path\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Plot elevation for path.\"\r\n                               ng-click=\"elevationPath()\"><i class=\"fa fa-align-left fa-rotate-270\"></i> </a>\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing original drawn path on map\"\r\n                               ng-click=\"togglePath()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!pathShown), \'fa-eye\':pathShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n                <div ng-mouseenter=\"mouseenterLcp()\" ng-mouseleave=\"mouseleaveLcp()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Least cost path\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Plot elevation for least cost path.\"\r\n                               ng-click=\"elevationLcpKml()\"><i class=\"fa fa-align-left fa-rotate-270\"></i> </a>\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing least cost path on map\"\r\n                               ng-click=\"toggleLcpKml()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!lcpKmlShown), \'fa-eye\':lcpKmlShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n\r\n                <div ng-mouseenter=\"mouseenterLcpBuffer()\" ng-mouseleave=\"mouseleaveLcpBuffer()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Least cost path buffer\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing least cost path buffer on map\"\r\n                               ng-click=\"toggleLcpBufferKml()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!lcpBufferKmlShown), \'fa-eye\':lcpBufferKmlShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n                <div ng-mouseenter=\"mouseenterCostSurface()\" ng-mouseleave=\"mouseleaveCostSurface()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Cost surface\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing cost surface on map\"\r\n                               ng-click=\"toggleCostSurface()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!costSurfaceShown), \'fa-eye\':costSurfaceShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n                <button type=\"button\" class=\"btn btn-default\" style=\"margin:2px;width:90%\" ng-click=\"zoomToCentre()\">Zoom to least cost path.</button>\r\n            </div>\r\n            <br/>\r\n            <div>\r\n                <div style=\"font-zize:120%; font-weight:bold; padding:5px;\" title=\"Requires that you have Google Earth installed and associated with KML and KMZ files.\">Link to Google Earth...</div>\r\n                <div ng-repeat=\"(key, result) in results.data.results\" ng-show=\"key | lcpLookup : \'showInGoogle\'\">\r\n                    <a target=\"_blank\" ng-href=\"{{urls[key]}}\" style=\"margin:3px;width:14em;display:inline-block\">{{key | lcpLookup}}</a> ({{key | lcpLookup : \"fileType\"}})<br/>\r\n                </div>\r\n            </div>\r\n        </div>\r\n    </div>\r\n    <div ng-if=\"results.data.jobStatus == \'esriJobFailed\'\">\r\n        <div>\r\n            The least cost path process failed. You may be able to help provide<br/>\r\n            information to assist the resolution of this problem by reporting:\r\n			<pre>ESRI Least cost path processing failed.\r\nTime: {{results.data.timeStamp | date : \'d/M/yyyy hh:mm:ss a\'}}\r\nJob ID: {{results.data.jobId}}</pre>\r\n        </div>\r\n    </div>\r\n    <div style=\"clear:both;padding:5px;text-align:center\"></div>\r\n</exp-modal>");
+$templateCache.put("map/leastCostPath/leastCostWeightings.html","<div class=\"expWeightings\">\r\n    <div class=\"panel-group\" id=\"accordion\">\r\n        <div class=\"panel panel-default\" ng-repeat=\"category in weightings\"  ng-show=\"category.group.length\">\r\n            <div class=\"panel-heading\">\r\n                {{category.label}}\r\n            </div>\r\n            <div id=\"collapseOne\" class=\"panel-collapse collapse in\">\r\n                <div class=\"panel-body\">\r\n                    <div ng-repeat=\"weighting in category.group\" class=\"lcpSlider\">\r\n                        <div style=\"float:left\">\r\n                            <input type=\"checkbox\" ng-model=\"weighting.selected\" class=\"fixAlignment\" />\r\n                            <span class=\"leastCostPathLabel\" ng-class=\"{disabled:!weighting.selected}\">{{weighting.label}}</span>\r\n                        </div>\r\n                        <span style=\"width:180px;float:right;margin-right:20px\" path-least-cost-slider></span>\r\n                        <div style=\"clear:both\"></div>\r\n                    </div>\r\n                </div>\r\n            </div>\r\n        </div>\r\n    </div>\r\n    <div style=\"padding-left:7px;padding-bottom:7px\">\r\n        <label for=\"lcpBufferSelect\">Path bounding box buffered by:</label>\r\n        <select ng-model=\"bufferPercent\" ng-options=\"k as v for (k, v) in bufferValues\"></select>%\r\n    </div>\r\n    <div class=\"buttons\" style=\"float:right\">\r\n        <button type=\"button\" class=\"btn btn-default\" style=\"width:6em;margin:2px\" ng-click=\"cancelLeastCostPath()\" title=\"Cancel calculation of least cost path\">Cancel</button>\r\n        <button type=\"button\" class=\"btn btn-default focusMe\" style=\"width:6em;margin:2px\" ng-click=\"showLeastCostPath($event)\" title=\"Confirm to continue calculation of least cost path\">Continue</button>\r\n    </div>\r\n    <div style=\"clear:both;text-align:center\"><strong>Note:</strong>The processing can take a while.<br/>You will be notified when the process is complete.</div>\r\n</div>");
 $templateCache.put("map/point/point.html","<exp-modal class=\"pointInspector ng-cloak\" icon-class=\"fa-map-marker\" is-open=\"point\" on-close=\"clearPoint()\" title=\"Features within approx. 2km\">	\r\n	<div class=\"pointContent\" ng-controller=\"OverFeatureCtrl as over\">\r\n		<div style=\"padding-bottom:7px;\">Elev. {{point.z | length : true}}, Lat. {{point.y | number : 3}}&deg;, Long. {{point.x | number:3}}&deg;</div>\r\n		<div ng-show=\"featuresInfo.results.length > 0\">\r\n			<div>\r\n				<div style=\"float:left; padding-bottom:10px\">{{allHidden() && \"Show\" || \"Hide\"}} all features</div>\r\n				<div style=\"float: right\">				\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show all features on map\"\r\n						ng-click=\"toggleAll()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':allHidden(), \'fa-eye\':!allHidden()}\"></i></a>\r\n				</div>\r\n			</div>\r\n			<div style=\"clear:both;\"></div>\r\n		</div>\r\n		<div ng-hide=\"featuresInfo.results.length > 0\">No nearby features.</div>\r\n	\r\n		<div ng-repeat=\"item in featuresInfo.results | featureGroups\" ng-class=\"{\'underlined\':!$last}\">\r\n			<div ng-show=\"greaterThanOneItem()\"  ng-mouseover=\"over.groupEnter(featuresInfo.results, item)\" ng-mouseout=\"over.groupLeave(featuresInfo.results, item)\">\r\n				<div style=\"float:left\">\r\n					<button type=\"button\" class=\"undecorated\" ng-click=\"expanded = !expanded\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':expanded,\'fa-caret-right\':(!expanded)}\"></i></button></button><strong>{{metadata[item].heading}}</strong>\r\n				</div>\r\n				<div style=\"float: right\">	\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"   \r\n						ng-click=\"groupShow(item)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!oneShowing()), \'fa-eye\':oneShowing()}\"></i></a>\r\n				</div>\r\n				<div style=\"clear:both;\"></div>\r\n			</div>\r\n			<div ng-repeat=\"feature in featuresInfo.results | filterGroupsByLayername : item\" ng-show=\"expanded || !greaterThanOneItem()\">\r\n				<div ng-mouseover=\"over.mouseenter(feature)\" ng-mouseout=\"over.mouseleave(feature)\" ng-click=\"over.click()\">\r\n					<div style=\"float: left;\" ng-class=\"{\'pad-left-big\':greaterThanOneItem()}\">\r\n						<button type=\"button\" ng-click=\"feature.expanded = !feature.expanded\" class=\"undecorated\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':feature.expanded,\'fa-caret-right\':(!feature.expanded)}\"></i></button>\r\n						<a href=\"javascript:;\" class=\"featureLink\" title=\"{{metadata[feature.layerName].description}}\"\r\n							ng-click=\"makeFeatureActive()\" ng-class=\"{active:(feature.active)}\">{{createTitle()}}</a>\r\n					</div>\r\n					<div style=\"float: right\">	\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Graph elevation changes for feature\'s path.\"\r\n							ng-click=\"elevationPath(metadata[feature.layerName].label + \' elevation plot\')\"><i class=\"fa fa-align-left fa-rotate-270\" ng-show=\"feature.geometryType == \'esriGeometryPolyline\'\"></i></a>					\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"\r\n							ng-click=\"toggleShow(feature)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!feature.displayed), \'fa-eye\':feature.displayed}\"></i> </a>\r\n					</div>\r\n				</div>\r\n				<div style=\"clear:both;\" ng-init=\"featureMeta = metadata[feature.layerName]\">\r\n					<div ng-repeat=\"attribute in featureMeta.attributes\" ng-show=\"feature.expanded\">\r\n						<div style=\"width:7em;float:left;font-weight:bold;padding-left:9px\">{{attribute.label}}</div>\r\n						<div style=\"min-width:12em;width:12em;margin-left:7.5em;\" class=\"ellipsis\" title=\"{{feature.attributes[attribute.key]}}\">{{feature.attributes[attribute.key] | dashNull}}</div>\r\n					</div>\r\n					<div style=\"border-bottom:1px solid lightgray\" ng-show=\"feature.expanded && !last\"></div>\r\n				</div>\r\n			</div>	\r\n		</div>\r\n	</div>\r\n</exp-modal>");}]);

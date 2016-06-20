@@ -1,0 +1,85 @@
+
+<exp-modal is-open="results.data" style="position:fixed;top:132px;left:42px" title="Least cost path control panel" on-close="clear()">
+    <div ng-if="results.data.jobStatus != 'esriJobFailed'" class="esriLcpSuccess">
+        <div>
+            <div>
+                <div style="float:left;font-zize:120%; font-weight:bold; padding:5px;">View...</div>
+                <div style="float:right">
+                    <a class="featureLink" href="javascript:;" title="Bring least cost path layers to the top of the map."
+                       ng-click="bringToTop()"><i class="fa fa-arrow-up"></i> </a>
+                </div>
+                <div ng-mouseenter="mouseenterPath()" ng-mouseleave="mouseleavePath()" style="clear:both">
+                    <div>
+                        <div style="float: left;padding-left:16px">
+                            Original drawn path
+                        </div>
+                        <div style="float: right">
+                            <a class="featureLink" href="javascript:;" title="Plot elevation for path."
+                               ng-click="elevationPath()"><i class="fa fa-align-left fa-rotate-270"></i> </a>
+                            <a class="featureLink" href="javascript:;" title="Toggle showing original drawn path on map"
+                               ng-click="togglePath()"><i class="fa" ng-class="{'fa-eye-slash':(!pathShown), 'fa-eye':pathShown}"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                <div ng-mouseenter="mouseenterLcp()" ng-mouseleave="mouseleaveLcp()" style="clear:both">
+                    <div>
+                        <div style="float: left;padding-left:16px">
+                            Least cost path
+                        </div>
+                        <div style="float: right">
+                            <a class="featureLink" href="javascript:;" title="Plot elevation for least cost path."
+                               ng-click="elevationLcpKml()"><i class="fa fa-align-left fa-rotate-270"></i> </a>
+                            <a class="featureLink" href="javascript:;" title="Toggle showing least cost path on map"
+                               ng-click="toggleLcpKml()"><i class="fa" ng-class="{'fa-eye-slash':(!lcpKmlShown), 'fa-eye':lcpKmlShown}"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div ng-mouseenter="mouseenterLcpBuffer()" ng-mouseleave="mouseleaveLcpBuffer()" style="clear:both">
+                    <div>
+                        <div style="float: left;padding-left:16px">
+                            Least cost path buffer
+                        </div>
+                        <div style="float: right">
+                            <a class="featureLink" href="javascript:;" title="Toggle showing least cost path buffer on map"
+                               ng-click="toggleLcpBufferKml()"><i class="fa" ng-class="{'fa-eye-slash':(!lcpBufferKmlShown), 'fa-eye':lcpBufferKmlShown}"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                <div ng-mouseenter="mouseenterCostSurface()" ng-mouseleave="mouseleaveCostSurface()" style="clear:both">
+                    <div>
+                        <div style="float: left;padding-left:16px">
+                            Cost surface
+                        </div>
+                        <div style="float: right">
+                            <a class="featureLink" href="javascript:;" title="Toggle showing cost surface on map"
+                               ng-click="toggleCostSurface()"><i class="fa" ng-class="{'fa-eye-slash':(!costSurfaceShown), 'fa-eye':costSurfaceShown}"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" class="btn btn-default" style="margin:2px;width:90%" ng-click="zoomToCentre()">Zoom to least cost path.</button>
+            </div>
+            <br/>
+            <div>
+                <div style="font-zize:120%; font-weight:bold; padding:5px;" title="Requires that you have Google Earth installed and associated with KML and KMZ files.">Link to Google Earth...</div>
+                <div ng-repeat="(key, result) in results.data.results" ng-show="key | lcpLookup : 'showInGoogle'">
+                    <a target="_blank" ng-href="{{urls[key]}}" style="margin:3px;width:14em;display:inline-block">{{key | lcpLookup}}</a> ({{key | lcpLookup : "fileType"}})<br/>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div ng-if="results.data.jobStatus == 'esriJobFailed'">
+        <div>
+            The least cost path process failed. You may be able to help provide<br/>
+            information to assist the resolution of this problem by reporting:
+			<pre>ESRI Least cost path processing failed.
+Time: {{results.data.timeStamp | date : 'd/M/yyyy hh:mm:ss a'}}
+Job ID: {{results.data.jobId}}</pre>
+        </div>
+    </div>
+    <div style="clear:both;padding:5px;text-align:center"></div>
+</exp-modal>

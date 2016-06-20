@@ -40,7 +40,7 @@
         };
     }
 
-    angular.module("geo.transect", ['explorer.config','explorer.feature.summary','explorer.flasher'])
+    angular.module("geo.transect", ['explorer.config','explorer.feature.summary','explorer.flasher','geo.path'])
 
         .provider("transectService", function() {
             var diagonal = 500,
