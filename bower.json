@@ -32,7 +32,6 @@
     "bower.json"
   ],
   "dependencies": {
-    "leaflet-draw": "0.2.x",
     "turf": "~2.0.2"
   }
 }

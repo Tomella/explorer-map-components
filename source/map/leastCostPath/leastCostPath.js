@@ -64,11 +64,6 @@
                             }
                         };
 
-                        $rootScope.$on("leastCost.path.draw", function (event) {
-                            $scope.show = true;
-                            $scope.points = [];
-                        });
-
                         $rootScope.$on("leastCost.path.data", function (event, entity) {
                             if (isPathCompleteEvent) return;
                             if (entity && entity.positions && entity.positions.length) {

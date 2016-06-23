@@ -20,7 +20,7 @@ angular.module('geo.drawhelper', ['geo.map'])
 
 .factory('drawHelperService', ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
 
-    var service = {}, callback, polygonDrawer, polylineDrawer, rectangleDrawer;
+    var service = {}, drawOptions, polygonDrawer, polylineDrawer, rectangleDrawer;
 
     service.getDrawHelper = function(){
 
@@ -35,20 +35,38 @@ angular.module('geo.drawhelper', ['geo.map'])
             polygonDrawer = new L.Draw.Polygon(map, options);
             polylineDrawer = new L.Draw.Polyline(map, options);
             rectangleDrawer = new L.Draw.Rectangle(map, options);
-            map.on("draw:created", function(event) {
-                if (callback) ({
-                    polygon : function() {
-                        callback(event.layer.getLatLngs());
-                    },
-                    polyline : function() {
-                        callback({length:event.layer.getLength(), positions:event.layer.getLatLngs()});
-                    },
-                    rectangle : function() {
-                        callback(event.layer.getBounds());
-                    }
-                })[event.layerType]();
+            function callCallback(event) {
+                if (drawOptions.callback) {
+                    var layer = event.layer || (event.layers && event.layers.getLayers()[0]);
+                    if (!layer)
+                        drawOptions.callback(null);
+                    else ({
+                        polygon : function() {
+                            drawOptions.callback(layer.getLatLngs());
+                        },
+                        polyline : function() {
+                            drawOptions.callback({length:layer.getLength(), positions:layer.getLatLngs()});
+                        },
+                        rectangle : function() {
+                            drawOptions.callback(layer.getBounds());
+                        }
+                    })[drawOptions._layerType]();
+                }
+            }
+            function doneDrawing(event) {
+                callCallback(event);
                 broadcastDrawState(false);
+            }
+            map.on("draw:created", function(event) {
+                if (!drawOptions.editable) return doneDrawing(event);
+                callCallback(event);
+                map.addLayer(drawOptions._editLayer = event.layer);
+                event.layer.options.editing = options;
+                event.layer.editing.enable();
             });
+            map.on("draw:deleted", doneDrawing);
+            map.on("draw:edited", doneDrawing);
+            map.on("draw:editvertex", callCallback);
             deferred.resolve(service);
         });
         return deferred.promise;
@@ -68,7 +86,8 @@ angular.module('geo.drawhelper', ['geo.map'])
      */
     service.drawPolyline = function(options){
         broadcastDrawState(true);
-        callback = options.callback;
+        drawOptions = options;
+        drawOptions._layerType = "polyline";
         polylineDrawer.enable();
     };
 
@@ -84,7 +103,8 @@ angular.module('geo.drawhelper', ['geo.map'])
      */
     service.drawPolygon = function(options){
         broadcastDrawState(true);
-        callback = options.callback;
+        drawOptions = options;
+        drawOptions._layerType = "polygon";
         polygonDrawer.enable();
     };
 
@@ -100,12 +120,19 @@ angular.module('geo.drawhelper', ['geo.map'])
      */
     service.drawExtent = function(options){
         broadcastDrawState(true);
-        callback = options.callback;
+        drawOptions = options;
+        drawOptions._layerType = "rectangle";
         rectangleDrawer.enable();
     };
 
     service.stopDrawing = function(){
-        callback = undefined;
+        if (drawOptions && drawOptions._editLayer) {
+            var layer = drawOptions._editLayer;
+            mapService.getMap().then(function(map) {
+                map.removeLayer(layer);
+            });
+        }
+        drawOptions = undefined;
         polygonDrawer.disable();
         polylineDrawer.disable();
         rectangleDrawer.disable();
