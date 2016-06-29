@@ -462,10 +462,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 }])
 
 
-.controller("OverFeatureCtrl", OverFeatureCtrl);
-
-OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
-function OverFeatureCtrl($filter, pointService) {
+.controller("OverFeatureCtrl", ['$filter', 'pointService', function($filter, pointService) {
 	this.click = function() {
 	};
 
@@ -490,6 +487,6 @@ function OverFeatureCtrl($filter, pointService) {
 			pointService.outFeatures(feature.feature);
 		});
 	};
-}
+}]);
 
 })(angular, L, window);

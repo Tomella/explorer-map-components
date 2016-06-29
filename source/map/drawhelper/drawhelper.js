@@ -37,7 +37,7 @@ angular.module('geo.drawhelper', ['geo.map'])
             rectangleDrawer = new L.Draw.Rectangle(map, options);
             function callCallback(event) {
                 if (drawOptions.callback) {
-                    var layer = event.layer || (event.layers && event.layers.getLayers()[0]);
+                    var layer = drawOptions._layer;
                     if (!layer)
                         drawOptions.callback(null);
                     else ({
@@ -58,14 +58,16 @@ angular.module('geo.drawhelper', ['geo.map'])
                 broadcastDrawState(false);
             }
             map.on("draw:created", function(event) {
+                drawOptions._layer = event.layer;
                 if (!drawOptions.editable) return doneDrawing(event);
                 callCallback(event);
-                map.addLayer(drawOptions._editLayer = event.layer);
+                map.addLayer(drawOptions._layer);
                 event.layer.options.editing = options;
                 event.layer.editing.enable();
             });
             map.on("draw:deleted", doneDrawing);
             map.on("draw:edited", doneDrawing);
+            map.on("draw:editresized", callCallback);
             map.on("draw:editvertex", callCallback);
             deferred.resolve(service);
         });
@@ -126,8 +128,8 @@ angular.module('geo.drawhelper', ['geo.map'])
     };
 
     service.stopDrawing = function(){
-        if (drawOptions && drawOptions._editLayer) {
-            var layer = drawOptions._editLayer;
+        if (drawOptions && drawOptions._layer) {
+            var layer = drawOptions._layer;
             mapService.getMap().then(function(map) {
                 map.removeLayer(layer);
             });
