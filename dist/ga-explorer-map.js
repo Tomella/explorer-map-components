@@ -1766,7 +1766,7 @@ angular.module('geo.drawhelper', ['geo.map'])
             rectangleDrawer = new L.Draw.Rectangle(map, options);
             function callCallback(event) {
                 if (drawOptions.callback) {
-                    var layer = event.layer || (event.layers && event.layers.getLayers()[0]);
+                    var layer = drawOptions._layer;
                     if (!layer)
                         drawOptions.callback(null);
                     else ({
@@ -1787,14 +1787,16 @@ angular.module('geo.drawhelper', ['geo.map'])
                 broadcastDrawState(false);
             }
             map.on("draw:created", function(event) {
+                drawOptions._layer = event.layer;
                 if (!drawOptions.editable) return doneDrawing(event);
                 callCallback(event);
-                map.addLayer(drawOptions._editLayer = event.layer);
+                map.addLayer(drawOptions._layer);
                 event.layer.options.editing = options;
                 event.layer.editing.enable();
             });
             map.on("draw:deleted", doneDrawing);
             map.on("draw:edited", doneDrawing);
+            map.on("draw:editresized", callCallback);
             map.on("draw:editvertex", callCallback);
             deferred.resolve(service);
         });
@@ -1855,8 +1857,8 @@ angular.module('geo.drawhelper', ['geo.map'])
     };
 
     service.stopDrawing = function(){
-        if (drawOptions && drawOptions._editLayer) {
-            var layer = drawOptions._editLayer;
+        if (drawOptions && drawOptions._layer) {
+            var layer = drawOptions._layer;
             mapService.getMap().then(function(map) {
                 map.removeLayer(layer);
             });
@@ -2514,115 +2516,6 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
-(function (angular, google, window) {
-
-'use strict';
-
-angular.module('geo.geosearch', ['ngAutocomplete'])
-
-.directive("expSearch", [function() {
-	return {
-		templateUrl : "components/geosearch/search.html",
-		scope : {
-			hideTo:"="
-		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
-			
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-				
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-							
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}		
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
-			});
-			return deferred.promise;   
-		}
-	};
-}]);
-
-}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2803,6 +2696,115 @@ angular.module('explorer.layers', ['geo.map'])
 }]);
 
 })(angular, L);
+(function (angular, google, window) {
+
+'use strict';
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+			
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");							
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+				
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+							
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}		
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode'] 
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;   
+		}
+	};
+}]);
+
+}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -5193,10 +5195,7 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 }])
 
 
-.controller("OverFeatureCtrl", OverFeatureCtrl);
-
-OverFeatureCtrl.$invoke = ['$filter', 'pointService'];
-function OverFeatureCtrl($filter, pointService) {
+.controller("OverFeatureCtrl", ['$filter', 'pointService', function($filter, pointService) {
 	this.click = function() {
 	};
 
@@ -5221,7 +5220,7 @@ function OverFeatureCtrl($filter, pointService) {
 			pointService.outFeatures(feature.feature);
 		});
 	};
-}
+}]);
 
 })(angular, L, window);
 
@@ -5741,6 +5740,73 @@ L.control.legend = function (options) {
 	
 })(L);
 
+L.Control.MousePosition = L.Control.extend({
+  options: {
+    position: 'bottomleft',
+    separator: ' : ',
+    emptyString: 'Unavailable',
+    lngFirst: false,
+    numDigits: 5,
+    elevGetter: undefined,
+    lngFormatter: undefined,
+    latFormatter: undefined,
+    prefix: ""
+  },
+
+  onAdd: function (map) {
+    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+    L.DomEvent.disableClickPropagation(this._container);
+    map.on('mousemove', this._onMouseMove, this);
+    this._container.innerHTML=this.options.emptyString;
+    return this._container;
+  },
+
+  onRemove: function (map) {
+    map.off('mousemove', this._onMouseMove);
+  },
+
+  _onMouseHover: function () {
+    var info = this._hoverInfo;
+    this._hoverInfo = undefined;
+    this.options.elevGetter(info).then(function(elevStr) {
+       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
+       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
+    }.bind(this));
+  },
+
+  _onMouseMove: function (e) {
+    var w = e.latlng.wrap();
+    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
+    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
+    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    if (this.options.elevGetter) {
+        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
+        this._hoverInfo = {
+            lat: w.lat,
+            lng: w.lng,
+            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
+        };
+    }
+    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
+  }
+
+});
+
+L.Map.mergeOptions({
+    positionControl: false
+});
+
+L.Map.addInitHook(function () {
+    if (this.options.positionControl) {
+        this.positionControl = new L.Control.MousePosition();
+        this.addControl(this.positionControl);
+    }
+});
+
+L.control.mousePosition = function (options) {
+    return new L.Control.MousePosition(options);
+};
+
 L.Control.ZoomBox = L.Control.extend({
     _active: false,
     _map: null,
@@ -5910,73 +5976,6 @@ L.Control.Zoomout = L.Control.extend({
 L.control.zoomout = function (options) {
   return new L.Control.Zoomout(options);
 };
-L.Control.MousePosition = L.Control.extend({
-  options: {
-    position: 'bottomleft',
-    separator: ' : ',
-    emptyString: 'Unavailable',
-    lngFirst: false,
-    numDigits: 5,
-    elevGetter: undefined,
-    lngFormatter: undefined,
-    latFormatter: undefined,
-    prefix: ""
-  },
-
-  onAdd: function (map) {
-    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
-    L.DomEvent.disableClickPropagation(this._container);
-    map.on('mousemove', this._onMouseMove, this);
-    this._container.innerHTML=this.options.emptyString;
-    return this._container;
-  },
-
-  onRemove: function (map) {
-    map.off('mousemove', this._onMouseMove);
-  },
-
-  _onMouseHover: function () {
-    var info = this._hoverInfo;
-    this._hoverInfo = undefined;
-    this.options.elevGetter(info).then(function(elevStr) {
-       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
-       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
-    }.bind(this));
-  },
-
-  _onMouseMove: function (e) {
-    var w = e.latlng.wrap();
-    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
-    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
-    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    if (this.options.elevGetter) {
-        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
-        this._hoverInfo = {
-            lat: w.lat,
-            lng: w.lng,
-            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
-        };
-    }
-    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
-  }
-
-});
-
-L.Map.mergeOptions({
-    positionControl: false
-});
-
-L.Map.addInitHook(function () {
-    if (this.options.positionControl) {
-        this.positionControl = new L.Control.MousePosition();
-        this.addControl(this.positionControl);
-    }
-});
-
-L.control.mousePosition = function (options) {
-    return new L.Control.MousePosition(options);
-};
-
 (function(L) {
 	L.Polyline.prototype.getLength = function () {
         var total = 0,
