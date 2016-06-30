@@ -122,9 +122,12 @@
 
                             var delta = kiloms / (diagonal - 1);
                             for (var i = 0; i < diagonal; i++) {
-                                var deltaFeature = turf.along(feature, i * delta, "kilometers");
-                                deltaFeature.geometry.coordinates.push(toHeight(deltaFeature.geometry.coordinates));
-                                response.features.push(deltaFeature);
+                                var deltaFeature = turf.along(feature, i * delta, "kilometers"),
+                                    height = toHeight(deltaFeature.geometry.coordinates);
+                                if (height > -32767) {
+                                    deltaFeature.geometry.coordinates.push(height);
+                                    response.features.push(deltaFeature);
+                                }
                             }
                             deferred.resolve(response);
 
