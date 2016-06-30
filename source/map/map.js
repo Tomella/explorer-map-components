@@ -145,7 +145,7 @@ angular.module("geo.map", [])
 		}
 
         var elevGetter, transectSvc = $injector.get('transectService');
-        if (transectSvc.canGetElevationAtPoint()) {
+        if (transectSvc.isServiceDataAvailable("elevation")) {
             elevGetter = function(latlng) {
                 return transectSvc.getElevationAtPoint(latlng).then(function(elev) {
                     if (elev === null) return '';

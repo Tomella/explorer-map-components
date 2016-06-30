@@ -1243,6 +1243,8 @@ angular.module('geo.chart.transect', ['geo.transect'])
         };
 
         service.drawChart = function(entity){
+            if (d3.selectAll("#transectChartD3 svg")[0].length) return;
+
             if (!chartMeta) {
                 return httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect.json').then(function(response) {
                     chartMeta = response.data.meta;
@@ -1304,7 +1306,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
                 .x(function(d) { return x(+d.x); })
                 .y(function(d) { return y(+d.z); });
 
-            d3.selectAll("#transectChartD3 svg").remove();
             var svg = d3.select("#transectChartD3").append("svg")
                 .attr("width", width + margin.left + margin.right)
                 .attr("height", height + margin.top + margin.bottom)
@@ -1317,7 +1318,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
             var propertyNames = [];
             var sortedXArray = [];
             var propertiesMap = {};
-            var elevationShown = $q.defer();
+            var elevdata, elevationShown = $q.defer();
 
             // get our meta data
             // init object for each defined property
@@ -1336,7 +1337,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
                 var ii = 1000 * service.properties.length;
                 transectService.getServiceData(key, entity.positions).then(function(response) {
                     if (key === "ELEVATION") {
-                        showElevation(response.features);
+                        showElevation(elevdata = response.features);
                         redrawLines();
                         elevationShown.resolve(true);
                         if(!$rootScope.$$phase) $rootScope.$apply();
@@ -1344,9 +1345,14 @@ angular.module('geo.chart.transect', ['geo.transect'])
                         elevationShown.promise.then(function() {
                             if (key === "FAULT")
                                 showFaults(response.features);
-                            else {
+                            else if (response.features.length) {
                                 $timeout(function() {
                                     showOther(key, response.features);
+                                    redrawLines();
+                                }, ii);
+                            } else {
+                                $timeout(function() {
+                                    showRandom(key, elevdata);
                                     redrawLines();
                                 }, ii);
                             }
@@ -1383,9 +1389,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
                     .style("opacity", 0.6);
             }
 
-            var elevdata = null;
             function showElevation(features) {
-                elevdata = features;
                 var distance, latLng, prevLatLng, values = propertiesMap.ELEVATION.values;
                 for(var i = 0; i < features.length; i++){
                     var coords = features[i].geometry.coordinates;
@@ -1546,7 +1550,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
             }
 
             function showOther(key, features) {
-                features = elevdata;
                 var values = propertiesMap[key].values;
                 var z = Math.random() * 100;
                 for(var i = 0; i < features.length; i++){
@@ -1554,7 +1557,20 @@ angular.module('geo.chart.transect', ['geo.transect'])
                     values.push({
                         x: coords[0],
                         y: coords[1],
-                        z: z += (Math.random() * 10) - 5
+                        z: coords[2]
+                    });
+                }
+            }
+
+            function showRandom(key, elevdata) {
+                var values = propertiesMap[key].values;
+                var z = Math.random() * 100;
+                for(var i = 0; i < elevdata.length; i++){
+                    var coords = elevdata[i].geometry.coordinates;
+                    values.push({
+                        x: coords[0],
+                        y: coords[1],
+                        z: 0//z += (Math.random() * 10) - 5
                     });
                 }
             }
@@ -2516,6 +2532,115 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
+(function (angular, google, window) {
+
+'use strict';
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+			
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");							
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+				
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+							
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}		
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode'] 
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;   
+		}
+	};
+}]);
+
+}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2696,115 +2821,6 @@ angular.module('explorer.layers', ['geo.map'])
 }]);
 
 })(angular, L);
-(function (angular, google, window) {
-
-'use strict';
-
-angular.module('geo.geosearch', ['ngAutocomplete'])
-
-.directive("expSearch", [function() {
-	return {
-		templateUrl : "components/geosearch/search.html",
-		scope : {
-			hideTo:"="
-		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
-			
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-				
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-							
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}		
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
-			});
-			return deferred.promise;   
-		}
-	};
-}]);
-
-}(angular, google, window));
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -5362,13 +5378,15 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
                                 // console.log("Cell x = " + cellX + ", y = " + cellY + " Index = " + index + ", value = " + loaded[index]);
                                 return loaded[index];
                             }
+                        }, function() {
+                            console.log("Failed to load transect data for " + name);
                         });
 
                         return deferred.promise;
                     },
 
-                    canGetElevationAtPoint: function () {
-                        return ptElevationUrl;
+                    isServiceDataAvailable: function (name) {
+                        return layers[name] && layers[name].urlTemplate;
                     },
 
                     getElevationAtPoint: function (latlng) {
@@ -6136,7 +6154,7 @@ angular.module("geo.map", [])
 		}
 
         var elevGetter, transectSvc = $injector.get('transectService');
-        if (transectSvc.canGetElevationAtPoint()) {
+        if (transectSvc.isServiceDataAvailable("elevation")) {
             elevGetter = function(latlng) {
                 return transectSvc.getElevationAtPoint(latlng).then(function(elev) {
                     if (elev === null) return '';

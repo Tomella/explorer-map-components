@@ -143,6 +143,8 @@ angular.module('geo.chart.transect', ['geo.transect'])
         };
 
         service.drawChart = function(entity){
+            if (d3.selectAll("#transectChartD3 svg")[0].length) return;
+
             if (!chartMeta) {
                 return httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect.json').then(function(response) {
                     chartMeta = response.data.meta;
@@ -204,7 +206,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
                 .x(function(d) { return x(+d.x); })
                 .y(function(d) { return y(+d.z); });
 
-            d3.selectAll("#transectChartD3 svg").remove();
             var svg = d3.select("#transectChartD3").append("svg")
                 .attr("width", width + margin.left + margin.right)
                 .attr("height", height + margin.top + margin.bottom)
@@ -217,7 +218,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
             var propertyNames = [];
             var sortedXArray = [];
             var propertiesMap = {};
-            var elevationShown = $q.defer();
+            var elevdata, elevationShown = $q.defer();
 
             // get our meta data
             // init object for each defined property
@@ -236,7 +237,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
                 var ii = 1000 * service.properties.length;
                 transectService.getServiceData(key, entity.positions).then(function(response) {
                     if (key === "ELEVATION") {
-                        showElevation(response.features);
+                        showElevation(elevdata = response.features);
                         redrawLines();
                         elevationShown.resolve(true);
                         if(!$rootScope.$$phase) $rootScope.$apply();
@@ -244,9 +245,14 @@ angular.module('geo.chart.transect', ['geo.transect'])
                         elevationShown.promise.then(function() {
                             if (key === "FAULT")
                                 showFaults(response.features);
-                            else {
+                            else if (response.features.length) {
                                 $timeout(function() {
                                     showOther(key, response.features);
+                                    redrawLines();
+                                }, ii);
+                            } else {
+                                $timeout(function() {
+                                    showRandom(key, elevdata);
                                     redrawLines();
                                 }, ii);
                             }
@@ -283,9 +289,7 @@ angular.module('geo.chart.transect', ['geo.transect'])
                     .style("opacity", 0.6);
             }
 
-            var elevdata = null;
             function showElevation(features) {
-                elevdata = features;
                 var distance, latLng, prevLatLng, values = propertiesMap.ELEVATION.values;
                 for(var i = 0; i < features.length; i++){
                     var coords = features[i].geometry.coordinates;
@@ -446,7 +450,6 @@ angular.module('geo.chart.transect', ['geo.transect'])
             }
 
             function showOther(key, features) {
-                features = elevdata;
                 var values = propertiesMap[key].values;
                 var z = Math.random() * 100;
                 for(var i = 0; i < features.length; i++){
@@ -454,7 +457,20 @@ angular.module('geo.chart.transect', ['geo.transect'])
                     values.push({
                         x: coords[0],
                         y: coords[1],
-                        z: z += (Math.random() * 10) - 5
+                        z: coords[2]
+                    });
+                }
+            }
+
+            function showRandom(key, elevdata) {
+                var values = propertiesMap[key].values;
+                var z = Math.random() * 100;
+                for(var i = 0; i < elevdata.length; i++){
+                    var coords = elevdata[i].geometry.coordinates;
+                    values.push({
+                        x: coords[0],
+                        y: coords[1],
+                        z: 0//z += (Math.random() * 10) - 5
                     });
                 }
             }

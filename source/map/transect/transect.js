@@ -136,13 +136,15 @@
                                 // console.log("Cell x = " + cellX + ", y = " + cellY + " Index = " + index + ", value = " + loaded[index]);
                                 return loaded[index];
                             }
+                        }, function() {
+                            console.log("Failed to load transect data for " + name);
                         });
 
                         return deferred.promise;
                     },
 
-                    canGetElevationAtPoint: function () {
-                        return ptElevationUrl;
+                    isServiceDataAvailable: function (name) {
+                        return layers[name] && layers[name].urlTemplate;
                     },
 
                     getElevationAtPoint: function (latlng) {
