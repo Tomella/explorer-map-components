@@ -14,7 +14,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/GeoscienceAustralia/explorer-map-components.git"
+    "url": "https://github.com/Tomella/explorer-map-components.git"
   },
   "authors": [
     "Geoscience Australia"
