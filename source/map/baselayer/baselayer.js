@@ -77,7 +77,7 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map'])
 
 				// Bit of a nasty workaround for the thing not working out the angular component
 				function setEnabled(enable) {
-					$(element).find(".slider-input").eq(0).slider(enable?"enable":"disable");
+					$(element).find("input")[0].disabled = enable?false:"disabled";
 				}
 			});
 		}
