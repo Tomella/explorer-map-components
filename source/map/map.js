@@ -6,7 +6,7 @@ angular.module("geo.map", [])
 
 .directive("geoMap", ["mapService", "waiting", function(mapService, waiting) {
 	var waiters;
-	
+
 	return {
 		restrict: "AE",
 		scope : {
@@ -24,7 +24,7 @@ angular.module("geo.map", [])
 				}
 			};
 		}],
-		
+
 		link : function(scope, element) {
 			scope.$watch("configuration" , function(config) {
 				if(config) {
@@ -35,7 +35,7 @@ angular.module("geo.map", [])
 					}
 				}
 			});
-			
+
 		}
 	};
 }])
@@ -51,12 +51,12 @@ angular.module("geo.map", [])
 		service = {
 			maps: {}
 		};
-	
+
 	service.getMap = function(name) {
 		if(!name) {
 			name = lastMap;
 		}
-		
+
 		if(lastMap) {
 			return $q.when(service.maps[name]);
 		}
@@ -64,11 +64,11 @@ angular.module("geo.map", [])
 		if(!waiters) {
 			waiters = waiting.wait();
 		}
-		return waiters.waiter().promise;	
+		return waiters.waiter().promise;
 	};
 
 	service.addToGroup = function(layer, groupName) {
-		this.getMap().then(function(map) { 
+		this.getMap().then(function(map) {
 			var group = groups[groupName];
 			if(group) {
 				addLayer(layer, group, map);
@@ -79,16 +79,16 @@ angular.module("geo.map", [])
 	service.getGroup = function(groupName) {
 		return groups[groupName];
 	};
-	
+
 	service.clearGroup = function(groupName) {
 		var layerGroup = groups[groupName],
 			layers = layerGroup.getLayers();
-		
+
 		layers.forEach(function(layer) {
 			layerGroup.removeLayer(layer);
-		});	
+		});
 	};
-	
+
 	service.removeFromGroup = function(data, groupName) {
 		var group = groups[groupName];
 		if(group) {
@@ -100,17 +100,17 @@ angular.module("geo.map", [])
     service.getGridLayer = function() {
         return gridLayer;
     };
-	
+
 	service.addMap = function(config) {
 		var map,
 			legendControlOptions = null;
-		
+
 		if(!config.name) {
 			config.name = START_NAME + (nameIndex++);
 		}
-		
+
 		lastMap = config.name;
-		
+
 		map = service.maps[config.name] = new L.Map(config.element, {
             center: config.options.center,
             zoom: config.options.zoom,
@@ -144,19 +144,11 @@ angular.module("geo.map", [])
 			});
 		}
 
-        var elevGetter, transectSvc = $injector.get('transectService');
-        if (transectSvc.isServiceDataAvailable("elevation")) {
-            elevGetter = function(latlng) {
-                return transectSvc.getElevationAtPoint(latlng).then(function(elev) {
-                    if (elev === null) return '';
-                    return "Elev: " + $filter('length')(Math.round(elev), true);
-                });
-            };
-        }
+        var elevGetter;
 
 		L.control.scale({imperial:false}).addTo(map);
 		L.control.mousePosition({
-				position:"bottomright", 
+				position:"bottomright",
 				emptyString:"",
 				seperator : " ",
                 elevGetter: elevGetter,
@@ -185,33 +177,33 @@ angular.module("geo.map", [])
 		if(legendControlOptions) {
 			map.addControl(L.control.legend(legendControlOptions));
 		}
-		
+
 		return map;
-		
+
 	};
-	
+
 	return service;
 
 	function addLayer(layer, target, map) {
 		var leafLayer = expandLayer(layer);
 		leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;
-		
+
 		if(layer.addLayerControl) {
 			if(!layerControl) {
 				layerControl = {};
-			} 
+			}
 			layerControl[layer.name] = leafLayer;
 		}
 		if(layer.defaultLayer || layer.pseudoBaseLayer) {
 			target.addLayer(leafLayer);
 		}
-		
+
 		if(layerControl) {
 			map.addControl(new L.Control.Layers( layerControl, {}));
 		}
 		layer.layer = leafLayer;
 	}
-	
+
 	function expandLayer(data) {
 		var Clazz = [];
 		if(angular.isArray(data.type)) {
@@ -224,10 +216,10 @@ angular.module("geo.map", [])
 		}
 		if(data.parameters && data.parameters.length > 0) {
 			return new Clazz(data.parameters[0], data.parameters[1], data.parameters[2], data.parameters[3], data.parameters[4]);
-		} 
+		}
 		return new Clazz();
 	}
-	
+
 }]);
 
 })(angular, L, window);

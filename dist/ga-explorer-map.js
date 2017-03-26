@@ -940,652 +940,6 @@ L.KMLMarker = L.Marker.extend({
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular) {
-'use strict';
-/**
- * Uses: https://raw.githubusercontent.com/seiyria/angular-bootstrap-slider
- */
-angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map', 'ui.bootstrap-slider'])
-
-.directive('geoBaselayerControl', ['$rootScope', 'mapHelper', 'mapService', function($rootScope, mapHelper, mapService) {
-	var DEFAULTS = {
-		maxZoom: 12
-	};
-	
-	return {
-		template : '<slider min="0" max="1" step="0.1" ng-model="slider.opacity" updateevent="slideStop"></slider>',
-		scope: {
-			maxZoom: "=?12"
-		},
-		link : function(scope, element) {
-			if(typeof scope.maxZoom == "undefined") {
-				scope.maxZoom = DEFAULTS.maxZoom;
-			}
-			scope.slider = {
-				opacity:1,
-				visibility:true, 
-				lastOpacity:1 
-			};
-			
-			// Get the initial value
-			mapHelper.getPseudoBaseLayer().then(function(layer) {
-				scope.layer = layer;
-				scope.slider.opacity = layer.options.opacity;	
-				scope.$watch("slider.opacity", function(newValue, oldValue) {
-					scope.layer.setOpacity(newValue);
-				});
-			});
-			
-			mapService.getMap().then(function(map) {
-				map.on("zoomend", execute);
-				
-				function execute() {
-					var zoom = map.getZoom();
-
-					if(scope.lastZoom < scope.maxZoom) {
-						scope.lastOpacity = scope.layer.options.opacity;
-					}
-					
-					if(zoom == scope.maxZoom) {
-						if(scope.lastZoom > scope.maxZoom) {
-							if(scope.lastOpacity < 0.5) {					
-								scope.slider.opacity = scope.lastOpacity;
-								scope.layer.setOpacity(scope.lastOpacity);					
-							} else {		
-								scope.slider.opacity = 0.5;
-								scope.layer.setOpacity(0.5);			
-							}							
-						} else if(scope.slider.opacity > 0.5) {							
-							scope.slider.opacity = 0.5;
-							scope.layer.setOpacity(0.5);
-						}
-						scope.slider.visibility = false;
-						setEnabled(false);
-					} else if(zoom < scope.maxZoom) {
-						if(scope.lastZoom <= scope.maxZoom) {
-							scope.slider.opacity = scope.lastOpacity;
-							scope.layer.setOpacity(scope.lastOpacity);
-						}
-						setEnabled(true);
-					} else if(zoom > scope.maxZoom && scope.lastZoom <= scope.maxZoom) {
-						scope.slider.visibility = false;
-						scope.slider.opacity = 0;
-						setEnabled(false);
-					}					
-					scope.lastZoom = zoom;
-					
-				}
-				
-				// Bit of a nasty workaround for the thing not working out the angular component 
-				function setEnabled(enable) {
-					$(element).find(".slider-input").eq(0).slider(enable?"enable":"disable");
-				}
-			});
-		}
-	};
-}])
-
-.run(['$rootScope', 'mapService', 'flashService', function($rootScope, mapService, flashService) {
-	var showingMessage;
-	
-    mapService.getMap().then(function(map) {
-    	map.oldZoomTo = map.zoomTo;
-    	map.zoomTo = function(value) {
-    		this.layers.forEach(function(layer) {
-    			if(layer.pseudoBaseLayer && layer.visibility) {
-    				var oldZoom    = map.zoom,
-    					thresholdOpacity = 0.4,
-    					thresholdZoom = layer.numZoomLevels,
-    					isBlank = value > thresholdZoom -2,
-    					isShowable = value < thresholdZoom - 1,
-    					isHalf = value == thresholdZoom - 2,
-    				
-    					oldIsShowable = oldZoom < thresholdZoom - 1,
-    					oldIsHalf = oldZoom == thresholdZoom - 2,
-    					goingUp = value > oldZoom,
-    					goingDown = value < oldZoom;
-    				
-    			
-   					// Do we show a message?
-   					if(goingUp) {
-   						if(thresholdZoom <= value + 1 && !showingMessage) {
-   							showingMessage = true;
-   							flashService.add("No detail available at this scale for " + layer.name, 3000);
-   							$rootScope.$broadcast('overlay.has.detail', false);
-   						}
-   					} else {
-   						showingMessage = false;
-   					}
-    			
-   					// Do we notify to enable the slider
-   					if(isShowable) {
-   						$rootScope.$broadcast('overlay.has.detail', true);
-   					}
-    			
-   					// Do we save the opacity?
-   					if(goingUp && oldIsShowable) {
-   						if((isHalf || isBlank) && !oldIsHalf) {
-   							layer.restoreOpacity = layer.opacity;
-   						}
-   						// 	Are we at that half way point?
-   						if(layer.opacity >= thresholdOpacity && isHalf) {
-   							layer.setOpacity(thresholdOpacity);
-   						}
-   					}
-    					
-   					if(isBlank && layer.opacity) {
-   						layer.setOpacity(0);
-   					}
-    			
-   					// Do we clobber restoreOpacity
-   					if(goingDown && isShowable) {
-   						// If its half we restore to half
-   						if(isHalf) {
-   							// unless it is already set
-   							if(!layer.opacity) {
-   								layer.setOpacity(layer.restoreOpacity < thresholdOpacity?layer.restoreOpacity:thresholdOpacity);
-   							}
-   						} else if(layer.restoreOpacity) {
-   							layer.setOpacity(layer.restoreOpacity);
-   							layer.restoreOpacity = null;
-   						}
-   					}
-    			}
-    		});
-    		this.oldZoomTo(value);
-    	};
-    });
-}]);
-
-})(angular);
-(function(angular, $, d3) {
-
-'use strict';
-
-angular.module('geo.chart.transect', ['geo.transect'])
-
-.directive('chartTransect', [function() {
-    return {
-        templateUrl : 'map/chartTransect/chartTransect.html',
-        controller : 'transectChartController'
-    };
-}])
-
-.controller('transectChartController', ['$rootScope', '$scope', 'chartState', 'transectChartService',
-        function($rootScope, $scope, chartState, transectChartService) {
-
-        $scope.chartState = chartState;
-        $scope.transectChartService = transectChartService;
-
-        $rootScope.$on("transect.plot.data", function (event, entity) {
-
-            if (entity && entity.length && entity.positions && entity.positions.length > 1) {
-
-                $scope.positions = entity.positions;
-                transectChartService.drawChart(entity);
-            }
-            else {
-                $rootScope.$broadcast("chart.update", {
-                    targetChartId: ""
-                });
-            }
-        });
-}])
-
-.factory('transectChartService', [
-    '$rootScope',
-    '$q', '$timeout',
-    '$filter',
-    'httpData',
-    'chartState',
-    'crosshairService',
-    'mapHelper',
-    'mapPanelState',
-    'transectService',
-    'featureSummaryService',
-        function(
-            $rootScope,
-            $q, $timeout,
-            $filter,
-            httpData,
-            chartState,
-            crosshairService,
-            mapHelper,
-            mapPanelState,
-            transectService,
-            featureSummaryService
-        ) {
-
-        var chartMeta, metaKeys, service = {};
-        service.url = "resources/mock-service/explorer-cossap-services/service/path/transect-esri.json"; //""; // set by consumer
-        service.propertyColors = {};
-        service.targetData = undefined;
-        service.pathDistance = undefined;
-        service.faultTransected = false;
-
-        service.line = undefined;
-        service.entity = undefined;
-
-        service.hideChart = function(hide){
-            $rootScope.$broadcast("chart.update", {
-                targetChartId: false
-            });
-        };
-
-        /*
-
-        Convert esriJson geoms into geoJson to be plotted by chart
-
-        TODO - we are crudely tacking on the meta data from a mock file; this meta data
-        TODO - should be published and extracted from the service directly, when it's ready
-
-         */
-        function esriToGeoJsonReformat(){
-
-            var deferred = $q.defer();
-            var geoJsonOut = {
-                meta: {},
-                data: []
-            };
-
-            httpData.get(service.url).then(function(response) {
-
-                var features = response.data.features;
-
-                httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect-esri-meta.json').then(function(response) {
-
-                    // tack on meta data to geojson
-                    geoJsonOut.meta = response.data.meta;
-
-                    // loop each feature, and append in expected geojson format
-                    for (var i = 0; (i < features.length); i++){
-
-                        // build properties key/values
-                        var properties = {}, geom = Terraformer.ArcGIS.parse(features[i].geometry);
-                        for (var property in geoJsonOut.meta){
-                            if(features[i].attributes[property]){
-                                if (property === "ELEVATION")
-                                    geom.push(features[i].attributes.ELEVATION);
-                                else
-                                    properties[property] = features[i].attributes[property];
-                            }
-                        }
-
-                        geoJsonOut.data.push({
-                            properties: properties,
-                            geometry: geom
-                        });
-                    }
-                    deferred.resolve(geoJsonOut);
-                });
-            });
-
-            return deferred.promise;
-        }
-
-        service.processGeometry = function() {
-            if (service.line) {
-                mapHelper.removeLayer(service.line);
-                service.line = undefined;
-                crosshairService.remove();
-                featureSummaryService.hidePopup();
-            }
-            if (service.entity && service.entity.positions) {
-                service.line = L.polyline(service.entity.positions, {color: 'black', weight:2, opacity:0.8});
-                mapHelper.addLayer(service.line);
-            }
-        };
-
-        service.cleanUpCallback = function() {
-            service.entity = undefined;
-            service.processGeometry();
-            document.getElementById("transectChartD3").innerHTML = "";
-        };
-
-        service.drawChart = function(entity){
-            if (d3.selectAll("#transectChartD3 svg")[0].length) return;
-
-            if (!chartMeta) {
-                return httpData.get('resources/mock-service/explorer-cossap-services/service/path/transect.json').then(function(response) {
-                    chartMeta = response.data.meta;
-                    service.drawChart(entity);
-                });
-            }
-
-            service.entity = entity;
-            service.processGeometry();
-
-            $rootScope.$broadcast("chart.update", {
-                targetChartId: "transectChart",
-                cleanUpCallback: service.cleanUpCallback
-            });
-
-            /*---------------------------------------- D3 -----------------------------------------*/
-            // adapted from: http://bl.ocks.org/mbostock/3884955
-
-            var mouseEventsActive = true;
-            var xAxisOffset = 70;
-            var margin = {top: 50, right: 20, bottom: 30, left: 50};
-
-            // min height 235
-            var height = ((document.body.clientHeight * 0.35 > 235) ? document.body.clientHeight * 0.35 : 235) - margin.top - margin.bottom;
-
-            // min width for chart is 1000 - legend width
-            var width = document.body.clientWidth - margin.left - margin.right - 275;
-            width = (width > 725) ? width : 725;
-
-            // min width for the whole panel is 1000
-            var minPanelWidth = width + 260 + margin.left + margin.right;
-            service.minPanelWidth = (minPanelWidth > 1000) ? minPanelWidth : 1000;
-
-            var x = d3.scale.linear()
-                .range([0, width]);
-
-            var y = d3.scale.linear()
-                .range([height, 0]);
-
-            var xAxis = d3.svg.axis()
-                .scale(x)
-                .orient("bottom")
-                .tickValues([0]);
-
-            var yAxis = d3.svg.axis()
-                .scale(y)
-                .orient("left")
-                .innerTickSize(-width)
-                .outerTickSize(10)
-                .tickPadding(10);
-
-            var line = d3.svg.line()
-
-                // smoothing?
-                //.interpolate("basis")
-
-                // cut out NO DATA values..?
-                .defined(function(d) { return d.z !== 0; })
-                .x(function(d) { return x(+d.x); })
-                .y(function(d) { return y(+d.z); });
-
-            var svg = d3.select("#transectChartD3").append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-                .attr("class", "chart-svg")
-                .style("z-index", "2")
-                .append("g")
-                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-
-            service.properties = [];
-            var propertyNames = [];
-            var sortedXArray = [];
-            var propertiesMap = {};
-            var elevdata, elevationShown = $q.defer();
-
-            // get our meta data
-            // init object for each defined property
-            angular.forEach(chartMeta, function(value, key) {
-                propertyNames.push(value.label);
-                if(key != "FAULT") {
-                    service.propertyColors[key] = value.color;
-                    service.properties.push(propertiesMap[key] = {
-                        name: key,
-                        color: value.color,
-                        label: value.label,
-                        description: value.description,
-                        values: []
-                    });
-                }
-                var ii = 1000 * service.properties.length;
-                transectService.getServiceData(key, entity.positions).then(function(response) {
-                    if (key === "ELEVATION") {
-                        showElevation(elevdata = response.features);
-                        redrawLines();
-                        elevationShown.resolve(true);
-                        if(!$rootScope.$$phase) $rootScope.$apply();
-                    } else {
-                        elevationShown.promise.then(function() {
-                            if (key === "FAULT")
-                                showFaults(response.features);
-                            else if (response.features.length) {
-                                $timeout(function() {
-                                    showOther(key, response.features);
-                                    redrawLines();
-                                }, ii);
-                            } else {
-                                $timeout(function() {
-                                    showRandom(key, elevdata);
-                                    redrawLines();
-                                }, ii);
-                            }
-                            if(!$rootScope.$$phase) $rootScope.$apply();
-                        });
-                    }
-                });
-            });
-
-            function getX(v) { return v.x; }
-            function getZ(v) { return v.z; }
-
-            function redrawLines() {
-                // push the y range out 10% on top so we don't get data hanging outside our scale
-                y.domain([
-                    d3.min(service.properties, function(c) { return d3.min(c.values, getZ); }),
-                    d3.max(service.properties, function(c) { return d3.max(c.values, getZ); }) * 1.1
-                ]);
-                svg.selectAll(".y.axis").remove();
-                svg.append("g").attr("class", "y axis").call(yAxis);
-
-                svg.selectAll(".property").remove();
-
-                svg.selectAll(".property")
-                    .data(service.properties)
-                    .enter().append("g")
-                    .attr("class", "property")
-                    .append("path")
-                    .attr("class", "line")
-                    .attr("d", function(d) { return line(d.values); })
-                    .style("stroke", function(d) { return d.color; })
-                    .style("stroke-width", 4)
-                    .style("z-index", "2")
-                    .style("opacity", 0.6);
-            }
-
-            function showElevation(features) {
-                var distance, latLng, prevLatLng, values = propertiesMap.ELEVATION.values;
-                for(var i = 0; i < features.length; i++){
-                    var coords = features[i].geometry.coordinates;
-                    values.push({
-                        x: coords[0],
-                        y: coords[1],
-                        z: coords[2]
-                    });
-
-                    latLng = L.latLng(coords[0], coords[1]);
-                    if (prevLatLng)
-                        distance += latLng.distanceTo(prevLatLng);
-                    else
-                        distance = 0;
-                    prevLatLng = latLng;
-
-                    // for bisect lookup on mouseover
-                    sortedXArray.push(coords[0]);
-                }
-
-                sortedXArray = sortedXArray.sort();
-                service.pathDistance = distance;
-                service.pathDistance = $filter('length')(service.pathDistance, true);
-                x.domain([d3.min(values, getX), d3.max(values, getX)]);
-
-                svg.append("g")
-                    .attr("class", "x axis")
-                    .attr("transform", "translate(0," + height + ")")
-                    .call(xAxis);
-
-                // y label
-                svg.append("text")
-                    .attr("y", -30)
-                    .attr("x", 20)
-                    .attr("dy", ".71em")
-                    .style("text-anchor", "end")
-                    .text("Z (m)");
-
-                // x label
-                svg.append("text")
-                    .attr("x", width / 2)
-                    .attr("y", height + 10)
-                    .attr("dy", ".71em")
-                    .style("text-anchor", "middle")
-                    .style("fill", "#000")
-                    .text("Path Distance: "+ service.pathDistance);
-
-                var vertical = d3.select("#transectChartD3")
-                    .append("div")
-                    .attr("class", "ng-hide")
-                    .style("position", "absolute")
-                    .style("z-index", "2")
-                    .style("width", "2px")
-                    .style("height", height+"px")
-                    .style("top", "50px")
-                    .style("bottom", "0px")
-                    .style("left", "20px")
-                    .style("margin-left", "-1px")
-                    .style("background", "#000");
-
-
-                d3.select("#transectChartD3")
-                    .append("div")
-                    .attr("class", "x-index")
-                    .style("left", x(x) + xAxisOffset +"px");
-
-                d3.select("#transectChartD3 .chart-svg")
-                    .on("mousemove", function(){
-
-                        if(!mouseEventsActive) return;
-
-                        // get pos
-                        d3.mousex = d3.mouse(this);
-                        d3.mousex = d3.mousex[0] + 20;
-
-                        // update y transect pos
-                        if(d3.mousex > xAxisOffset && d3.mousex < width + xAxisOffset){
-                            vertical.style("left", d3.mousex + "px" );
-                            vertical.attr("class", "ng-show vertical-transect");
-                        }
-                        else {
-                            vertical.attr("class", "ng-hide");
-                            return false;
-                        }
-
-                        // adjust for svg x offest
-                        d3.mousex = d3.mousex - xAxisOffset;
-
-                        // use invertedX value to find index in our lookup array
-                        var index = d3.bisectLeft(sortedXArray, x.invert(d3.mousex));
-                        var target = {};
-
-                        service.properties.forEach(function(property){
-                            target[property.name] = property.values[index];
-                        });
-
-                        var position = {
-                            markerLonLat : L.latLng(target.ELEVATION.y, target.ELEVATION.x),
-                            point:target.ELEVATION
-                        };
-                        crosshairService.move(target.ELEVATION);
-                        featureSummaryService.getAndShowFeatures(position);
-                        service.targetData = target;
-
-                        if(!$rootScope.$$phase) {
-                            $rootScope.$apply();
-                        }
-
-                    })
-                    .on("mouseover", function() {
-
-                        if(!mouseEventsActive) return;
-
-                        // get pos
-                        d3.mousex = d3.mouse(this);
-                        d3.mousex = d3.mousex[0] + 20;
-
-                        // update y transect pos
-                        if (d3.mousex > xAxisOffset && d3.mousex < width + xAxisOffset) {
-                            vertical.style("left", d3.mousex + "px");
-                            vertical.attr("class", "ng-show vertical-transect");
-                        }
-                        else {
-                            vertical.attr("class", "ng-hide");
-                        }
-
-                    });
-
-                // pin chart for inspection
-                d3.select("#transectChartD3")
-
-                    .on("click", function() {
-
-                        // toggle mouseEvents
-                        mouseEventsActive = !mouseEventsActive;
-                        d3.select(".vertical-transect")
-                            .style("width", (mouseEventsActive ? 2 : 4)+"px")
-                            .style("margin-left", -(mouseEventsActive ? 1 : 2)+"px");
-
-                        // center target pos
-                        if(!mouseEventsActive){
-                            mapHelper.zoomToMarkPoints([[service.targetData.ELEVATION.x, service.targetData.ELEVATION.y]]);
-                        }
-                    });
-            }
-
-            function showFaults(features) {
-                var parent = d3.select("#transectChartD3");
-                for(var i = 0; i < features.length; i++){
-                    var coords = features[i].geometry.coordinates;
-                    if (coords[2] !== 0){
-                        parent.append("div")
-                            .attr("class", "fault-transect")
-                            .style("height", height+"px")
-                            .style("left", x(coords[0]) + xAxisOffset +"px");
-                    }
-                }
-            }
-
-            function showOther(key, features) {
-                var values = propertiesMap[key].values;
-                var z = Math.random() * 100;
-                for(var i = 0; i < features.length; i++){
-                    var coords = features[i].geometry.coordinates;
-                    values.push({
-                        x: coords[0],
-                        y: coords[1],
-                        z: coords[2]
-                    });
-                }
-            }
-
-            function showRandom(key, elevdata) {
-                var values = propertiesMap[key].values;
-                var z = Math.random() * 100;
-                for(var i = 0; i < elevdata.length; i++){
-                    var coords = elevdata[i].geometry.coordinates;
-                    values.push({
-                        x: coords[0],
-                        y: coords[1],
-                        z: 0//z += (Math.random() * 10) - 5
-                    });
-                }
-            }
-
-            /*---------------------------------------- /D3 -----------------------------------------*/
-
-        };
-
-        return service;
-}]);
-
-})(angular, $, d3);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular, L) {
 
 'use strict';
@@ -1633,113 +987,159 @@ angular.module("explorer.crosshair", ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-
-(function(angular){
+(function(angular) {
 'use strict';
+angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map'])
 
-angular.module("geo.draw", ['geo.map'])
-
-.directive("geoDraw", ['$log', '$rootScope', 'drawService', function($log, $rootScope, drawService) {
+.directive('geoBaselayerControl', ['$rootScope', 'mapHelper', 'mapService', function($rootScope, mapHelper, mapService) {
 	var DEFAULTS = {
-		rectangleEvent : "geo.draw.rectangle.created",
-		lineEvent : "geo.draw.line.created"
+		maxZoom: 12
 	};
-	
-	
+
 	return {
-		restrict : "AE",
-		scope : {
-			data: "=",
-			rectangleEvent : "@",
-			lineEvent : "@"
+		template : '<input type="range" min="0" max="1" step="0.1" style="background: transparent" title="Topographic layer transparency"' +
+         'ng-model="slider.opacity" updateevent="slideStop" class="base-layer-input"></input>',
+		scope: {
+			maxZoom: "=?12"
 		},
-		link : function(scope, element, attrs, ctrl) {
-			
-			angular.forEach(DEFAULTS, function(value, key) {
-				if(!scope[key]) {
-					scope[key] = value;
+		link : function(scope, element) {
+			if(typeof scope.maxZoom === "undefined") {
+				scope.maxZoom = DEFAULTS.maxZoom;
+			}
+			scope.slider = {
+				opacity:1,
+				visibility:true,
+				lastOpacity:1
+			};
+
+			// Get the initial value
+			mapHelper.getPseudoBaseLayer().then(function(layer) {
+				scope.layer = layer;
+				scope.slider.opacity = layer.options.opacity;
+				scope.$watch("slider.opacity", function(newValue, oldValue) {
+					scope.layer.setOpacity(newValue);
+				});
+			});
+
+			mapService.getMap().then(function(map) {
+				map.on("zoomend", execute);
+
+				function execute() {
+					var zoom = map.getZoom();
+
+					if(scope.lastZoom < scope.maxZoom) {
+						scope.lastOpacity = scope.layer.options.opacity;
+					}
+
+					if(zoom === scope.maxZoom) {
+						if(scope.lastZoom > scope.maxZoom) {
+							if(scope.lastOpacity < 0.5) {
+								scope.slider.opacity = scope.lastOpacity;
+								scope.layer.setOpacity(scope.lastOpacity);
+							} else {
+								scope.slider.opacity = 0.5;
+								scope.layer.setOpacity(0.5);
+							}
+						} else if(scope.slider.opacity > 0.5) {
+							scope.slider.opacity = 0.5;
+							scope.layer.setOpacity(0.5);
+						}
+						scope.slider.visibility = false;
+						setEnabled(false);
+					} else if(zoom < scope.maxZoom) {
+						if(scope.lastZoom <= scope.maxZoom) {
+							scope.slider.opacity = scope.lastOpacity;
+							scope.layer.setOpacity(scope.lastOpacity);
+						}
+						setEnabled(true);
+					} else if(zoom > scope.maxZoom && scope.lastZoom <= scope.maxZoom) {
+						scope.slider.visibility = false;
+						scope.slider.opacity = 0;
+						setEnabled(false);
+					}
+					scope.lastZoom = zoom;
+
+				}
+
+				// Bit of a nasty workaround for the thing not working out the angular component
+				function setEnabled(enable) {
+					$(element).find(".slider-input").eq(0).slider(enable?"enable":"disable");
 				}
 			});
-			
-				
-			drawService.createControl(scope);
 		}
 	};
 }])
 
-.factory("drawService", ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
-	var drawControl,
-		drawer,
-		featureGroup,
-		rectangleDeferred;	
-	
-	return {
-		createControl : function(parameters) {
-			if(drawControl) {
-				$q.when(drawControl);
-			}
-			
-			return mapService.getMap().then(function(map) {
-				var drawnItems = new L.FeatureGroup(),
-				    options = { 
-				       edit: {
-				          featureGroup: drawnItems
-				       }
-				    };
-	
-				if(parameters.data) {
-					angular.extend(options, parameters.data);
-				}			
-				
-				featureGroup = parameters.drawnItems = drawnItems;
-				
-				map.addLayer(drawnItems);
-				// Initialise the draw control and pass it the FeatureGroup of editable layers
-				drawControl = new L.Control.Draw(options);
-				map.addControl(drawControl);
-				map.on("draw:created", function(event) {
-					({
-						polyline : function() {
-							var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
-							$rootScope.$broadcast(parameters.lineEvent, data);
-						},
-						// With rectangles only one can be drawn at a time.
-						rectangle : function() {
-							var data = {bounds:event.layer.getBounds()};
-							rectangleDeferred.resolve(data);
-							rectangleDeferred = null;
-						}
-					})[event.layerType]();
-				});
-				
-				return drawControl;
-			});
-		},
-		
-		cancelDrawRectangle : function() {
-			if(rectangleDeferred) {
-				rectangleDeferred.reject();
-				rectangleDeferred = null;
-				if(drawer) {
-					drawer.disable();
-				}
-			}
-		},
-		
-		drawRectangle : function() {
-			this.cancelDrawRectangle();
-			rectangleDeferred = $q.defer();
-			if(drawer) {
-				drawer.enable();
-			} else {
-				mapService.getMap().then(function(map) {
-					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline);
-					drawer.enable();
-				});
-			}			
-			return rectangleDeferred.promise;
-		}
-	};
+.run(['$rootScope', 'mapService', 'flashService', function($rootScope, mapService, flashService) {
+	var showingMessage;
+
+    mapService.getMap().then(function(map) {
+    	map.oldZoomTo = map.zoomTo;
+    	map.zoomTo = function(value) {
+    		this.layers.forEach(function(layer) {
+    			if(layer.pseudoBaseLayer && layer.visibility) {
+    				var oldZoom    = map.zoom,
+    					thresholdOpacity = 0.4,
+    					thresholdZoom = layer.numZoomLevels,
+    					isBlank = value > thresholdZoom -2,
+    					isShowable = value < thresholdZoom - 1,
+    					isHalf = value === thresholdZoom - 2,
+
+    					oldIsShowable = oldZoom < thresholdZoom - 1,
+    					oldIsHalf = oldZoom === thresholdZoom - 2,
+    					goingUp = value > oldZoom,
+    					goingDown = value < oldZoom;
+
+
+   					// Do we show a message?
+   					if(goingUp) {
+   						if(thresholdZoom <= value + 1 && !showingMessage) {
+   							showingMessage = true;
+   							flashService.add("No detail available at this scale for " + layer.name, 3000);
+   							$rootScope.$broadcast('overlay.has.detail', false);
+   						}
+   					} else {
+   						showingMessage = false;
+   					}
+
+   					// Do we notify to enable the slider
+   					if(isShowable) {
+   						$rootScope.$broadcast('overlay.has.detail', true);
+   					}
+
+   					// Do we save the opacity?
+   					if(goingUp && oldIsShowable) {
+   						if((isHalf || isBlank) && !oldIsHalf) {
+   							layer.restoreOpacity = layer.opacity;
+   						}
+   						// 	Are we at that half way point?
+   						if(layer.opacity >= thresholdOpacity && isHalf) {
+   							layer.setOpacity(thresholdOpacity);
+   						}
+   					}
+
+   					if(isBlank && layer.opacity) {
+   						layer.setOpacity(0);
+   					}
+
+   					// Do we clobber restoreOpacity
+   					if(goingDown && isShowable) {
+   						// If its half we restore to half
+   						if(isHalf) {
+   							// unless it is already set
+   							if(!layer.opacity) {
+   								layer.setOpacity(layer.restoreOpacity < thresholdOpacity?layer.restoreOpacity:thresholdOpacity);
+   							}
+   						} else if(layer.restoreOpacity) {
+   							layer.setOpacity(layer.restoreOpacity);
+   							layer.restoreOpacity = null;
+   						}
+   					}
+    			}
+    		});
+    		this.oldZoomTo(value);
+    	};
+    });
 }]);
 
 })(angular);
@@ -1895,6 +1295,119 @@ angular.module('geo.drawhelper', ['geo.map'])
 }]);
 
 })(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular){
+'use strict';
+
+angular.module("geo.draw", ['geo.map'])
+
+.directive("geoDraw", ['$log', '$rootScope', 'drawService', function($log, $rootScope, drawService) {
+	var DEFAULTS = {
+		rectangleEvent : "geo.draw.rectangle.created",
+		lineEvent : "geo.draw.line.created"
+	};
+	
+	
+	return {
+		restrict : "AE",
+		scope : {
+			data: "=",
+			rectangleEvent : "@",
+			lineEvent : "@"
+		},
+		link : function(scope, element, attrs, ctrl) {
+			
+			angular.forEach(DEFAULTS, function(value, key) {
+				if(!scope[key]) {
+					scope[key] = value;
+				}
+			});
+			
+				
+			drawService.createControl(scope);
+		}
+	};
+}])
+
+.factory("drawService", ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
+	var drawControl,
+		drawer,
+		featureGroup,
+		rectangleDeferred;	
+	
+	return {
+		createControl : function(parameters) {
+			if(drawControl) {
+				$q.when(drawControl);
+			}
+			
+			return mapService.getMap().then(function(map) {
+				var drawnItems = new L.FeatureGroup(),
+				    options = { 
+				       edit: {
+				          featureGroup: drawnItems
+				       }
+				    };
+	
+				if(parameters.data) {
+					angular.extend(options, parameters.data);
+				}			
+				
+				featureGroup = parameters.drawnItems = drawnItems;
+				
+				map.addLayer(drawnItems);
+				// Initialise the draw control and pass it the FeatureGroup of editable layers
+				drawControl = new L.Control.Draw(options);
+				map.addControl(drawControl);
+				map.on("draw:created", function(event) {
+					({
+						polyline : function() {
+							var data = {length:event.layer.getLength(), geometry:event.layer.getLatLngs()};
+							$rootScope.$broadcast(parameters.lineEvent, data);
+						},
+						// With rectangles only one can be drawn at a time.
+						rectangle : function() {
+							var data = {bounds:event.layer.getBounds()};
+							rectangleDeferred.resolve(data);
+							rectangleDeferred = null;
+						}
+					})[event.layerType]();
+				});
+				
+				return drawControl;
+			});
+		},
+		
+		cancelDrawRectangle : function() {
+			if(rectangleDeferred) {
+				rectangleDeferred.reject();
+				rectangleDeferred = null;
+				if(drawer) {
+					drawer.disable();
+				}
+			}
+		},
+		
+		drawRectangle : function() {
+			this.cancelDrawRectangle();
+			rectangleDeferred = $q.defer();
+			if(drawer) {
+				drawer.enable();
+			} else {
+				mapService.getMap().then(function(map) {
+					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline);
+					drawer.enable();
+				});
+			}			
+			return rectangleDeferred.promise;
+		}
+	};
+}]);
+
+})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2901,747 +2414,6 @@ angular.module("explorer.layer.slider", [])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function (angular, L) {
-    'use strict';
-
-    var leastCostPathExtent;
-
-    angular.module("explorer.least.cost.path", [
-        'explorer.config',
-        'explorer.flasher',
-        'explorer.persist',
-        'explorer.message'])
-
-        .directive("leastCostPathDraw", ['$log', 'lcpService', 'flashService', 'persistService', 'configService',
-            function($log, lcpService, flashService, persistService, configService) {
-                return {
-                    templateUrl:'map/leastCostPath/draw.html',
-                    replace:true,
-                    restrict:"AE",
-                    controller:['$scope', '$rootScope', function($scope, $rootScope) {
-                        $scope.points = [];
-
-                        configService.getConfig().then(function(config){
-                            leastCostPathExtent = config.leastCostPathExtent;
-                        });
-
-                        $scope.remove = function() {
-                            var index = $scope.points.indexOf(this.point);
-                            if (index > -1) {
-                                $scope.points.splice(index, 1);
-                                lcpService.removePoint(this.point);
-                            }
-                        };
-
-                        var isPathCompleteEvent = false;
-                        $scope.pathComplete = function() {
-                            isPathCompleteEvent = true;
-                            $rootScope.$broadcast("leastCost.path.data", null);
-                            isPathCompleteEvent = false;
-                            $scope.pathGeometry = lcpService.getPathGeometry();
-                            if($scope.lastResistanceCategories) {
-                                // This way we preserve the last entered weightings.
-                                $scope.resistanceCategories = $scope.lastResistanceCategories;
-                            } else {
-                                // Alternatively retrieve them from the service.
-                                lcpService.weightings().then(function(weightObj) {
-                                    // Merge in those from previous sessions.
-                                    persistService.getItem("lcpWeightings").then(function(weightings) {
-                                        if(weightings) {
-                                            weightObj.forEach(function(category) {
-                                                category.group.forEach(function(child) {
-                                                    var matched = weightings[child.key];
-                                                    if(matched || matched === 0) {
-                                                        child.value = matched.value;
-                                                        child.selected = matched.selected;
-                                                    }
-                                                });
-                                            });
-                                        }
-                                    });
-                                    $scope.resistanceCategories = weightObj;
-                                });
-                            }
-                        };
-
-                        $rootScope.$on("leastCost.path.data", function (event, entity) {
-                            if (isPathCompleteEvent) return;
-                            if (entity && entity.positions && entity.positions.length) {
-                                $scope.show = true;
-                                $scope.points = entity.positions;
-                                $scope.distance = entity.length;
-                                lcpService.setPathGeometry(entity.positions);
-                            } else {
-                                $scope.show = false;
-                                $scope.points = [];
-                                $scope.distance = 0;
-                                lcpService.reset();
-                            }
-                        });
-
-                        // Here is where we persist state..
-                        $scope.$watch("resistanceCategories", function(newValue, oldValue){
-                            if(oldValue) {
-                                if (!newValue) $scope.show = false; // weightings dialog dismissed
-                                $scope.lastResistanceCategories = oldValue;
-                                var savedKeys = {};
-                                oldValue.forEach(function(category) {
-                                    category.group.forEach(function(child) {
-                                        savedKeys[child.key] = {
-                                            value :child.value,
-                                            selected:child.selected
-                                        };
-                                    });
-                                });
-                                persistService.setItem("lcpWeightings", savedKeys);
-                            }
-                        });
-                    }]
-                };
-            }])
-
-        .directive("leastCostWeightings", ['$log', '$modal', 'lcpService', 'messageService',
-            function($log, $modal, lcpService, messageService) {
-            return {
-                scope: {
-                    weightings : "=",
-                    pathGeometry : "="
-                },
-                controller:[function() {
-
-                }],
-                link:function(scope, element, attrs) {
-                    var modalInstance;
-
-                    scope.$watch("weightings", function(newValue, oldValue) {
-                        if(newValue) {
-
-                            modalInstance = $modal.open({
-                                templateUrl : "map/leastCostPath/leastCostWeightings.html",
-                                size:"md",
-                                backdrop:'static',
-                                controller : ['$scope', '$rootScope', '$modalInstance', 'weightings', 'pathGeometry',
-                                    function($scope, $rootScope, $modalInstance, weightings, pathGeometry) {
-                                    $scope.weightings = weightings;
-                                    $scope.pathGeometry = pathGeometry;
-
-                                    // Show the panel
-                                    determineBufferRange();
-
-                                    $scope.close = function() {
-                                        $scope.weightings = null;
-                                    };
-
-                                    $scope.cancelLeastCostPath = function() {
-                                        $scope.weightings = null;
-                                        $modalInstance.dismiss(null);
-                                    };
-
-                                    $scope.showLeastCostPath = function(event) {
-                                        event.stopPropagation();
-                                        $modalInstance.close($scope.bufferPercent);
-                                    };
-
-                                    function determineBufferRange() {
-                                        var lbounds = L.polyline($scope.pathGeometry).getBounds(),
-                                            bounds = {
-                                               right: lbounds.getEast(),
-                                               left: lbounds.getWest(),
-                                               top: lbounds.getNorth(),
-                                               bottom: lbounds.getSouth()
-                                            },
-                                            bufferValues = {"0":0},
-                                            bufferPercent = "0",
-                                            restrictionMessage = null;
-
-                                        if(inBounds(0.1)) {
-                                            bufferValues[bufferPercent = "0.1"] = 10;
-                                            if(inBounds(0.25)) {
-                                                bufferValues[bufferPercent = "0.25"] = 25;
-                                                if(inBounds(0.5))
-                                                    bufferValues[bufferPercent = "0.5"] = 50;
-                                                else
-                                                    restrictionMessage = "Can not buffer extent by more than 25% as it would exceed the extent of our data";
-                                            } else {
-                                                restrictionMessage = "Can not buffer extent by more than 10% as it would exceed the extent of our data";
-                                            }
-                                        } else {
-                                            restrictionMessage = "Extent buffering restricted to line extent due to lack of data";
-                                        }
-
-                                        $scope.bufferValues = bufferValues; 		// {"0":0, "0.1":10, "0.25":25, "0.50":50};
-                                        $scope.bufferPercent = bufferPercent; 	// "0.25";
-                                        if(restrictionMessage) {
-                                            messageService.info(restrictionMessage);
-                                        }
-
-                                        function inBounds(bufferPercent) {
-                                            var xBuff = (bounds.right - bounds.left) * bufferPercent,
-                                                yBuff = (bounds.top - bounds.bottom) * bufferPercent,
-                                                buff  = xBuff > yBuff? xBuff : yBuff,
-                                                left = bounds.left - buff,
-                                                right = bounds.right + buff,
-                                                bottom = bounds.bottom - buff,
-                                                top = bounds.top + buff;
-
-                                            return leastCostPathExtent.top > top &&
-                                                leastCostPathExtent.left < left &&
-                                                leastCostPathExtent.right > right &&
-                                                leastCostPathExtent.bottom < bottom;
-                                        }
-                                    }
-                                }],
-                                resolve: {
-                                    weightings : function() {
-                                        return scope.weightings;
-                                    },
-                                    pathGeometry : function() {
-                                        return scope.pathGeometry;
-                                    }
-                                }
-                            });
-
-                            modalInstance.result.then(function (bufferPercent) {
-                                processSelections(scope.weightings, scope.pathGeometry, bufferPercent);
-                                closed();
-                            }, function () {
-                                closed();
-                            });
-
-                        }
-
-                        function processSelections(selectedWeightings, geometry, bufferPercent) {
-                            var weightings = {};
-
-                            // Normalise what we send the service. It doesn't need know about our structure.
-                            selectedWeightings.forEach(function(resistance) {
-                                resistance.group.forEach(function(item) {
-                                    weightings[item.key] = item;
-                                });
-                            });
-                            lcpService.getLeastCostPath(geometry, weightings, (bufferPercent === 0 || bufferPercent?bufferPercent:0.25)).then(function(response) {
-                                lcpService.reset();
-                                if (!response) {
-                                    failed({
-                                        text: "Least cost path request failed."
-                                    });
-                                } else if(response.jobName == "displayMessage" || response.error) {
-                                    if(!response.text) response.text = response.details;
-                                    failed(response);
-                                    scope.leastCostPath = null;
-                                } else {
-                                    var results = lcpService.results();
-                                    results.data = response.data;
-                                    results.data.geometry = geometry;
-                                    results.distance = Exp.Util.toLineDistance(geometry);
-                                    results.data.timeStamp = Date.now();
-                                }
-                            }, failed);
-                        }
-
-                    });
-
-                    function failed(message) {
-                        messageService.error(message.text);
-                    }
-
-                    function closed() {
-                        scope.weightings = null;
-                    }
-                }
-            };
-        }])
-
-        .directive("expLeastCostPathDisplay", ['$log', 'lcpService', '$filter', function($log, lcpService, $filter) {
-            return {
-                templateUrl : "map/leastCostPath/leastCostDisplay.html",
-                restrict:"AE",
-                controller : ['$scope', function($scope) {
-                    $scope.results = lcpService.results();
-
-                    $scope.urls = {};
-
-                    $scope.$watch("results.data", function(data) {
-                        if(data) {
-                            // Clear showing flags.
-                            $scope.lcpKmlShown = $scope.lcpBufferKmlShown = $scope.pathShown = $scope.costSurfaceShown = false;
-                            angular.forEach(data.results, function(value, key) {
-                                lcpService.getResourceUrl(data.jobId, key).then(function(url) {
-                                    $scope.urls[key] = url;
-                                    if(key == "lcpKml") {
-                                        $scope.lcpKmlShown = true;
-                                        lcpService.showPathKml(url);
-                                    } else if(key == "lcpCorridorKml") {
-                                        $scope.lcpBufferKmlShown = true;
-                                        lcpService.showBufferKml(url);
-                                    }
-                                });
-                            });
-                        }
-                    });
-
-                    $scope.clear = function() {
-                        $scope.results.data = $scope.results.distance = null;
-                    };
-
-                    $scope.stringify = function(what) {
-                        if(what) {
-                            return JSON.stringify(what);
-                        }
-                    };
-
-                    $scope.bringToTop = function() {
-                        lcpService.bringToTop();
-                    };
-
-                    $scope.zoomToCentre = function() {
-                        lcpService.zoomToBufferlLayer();
-                    };
-
-                    $scope.toggleLcpKml = function() {
-                        $scope.lcpKmlShown = lcpService.togglePathKml($scope.urls.lcpKml);
-                    };
-
-                    $scope.toggleLcpBufferKml = function() {
-                        $scope.lcpBufferKmlShown = lcpService.toggleBufferKml($scope.urls.lcpCorridorKml);
-                    };
-
-                    $scope.togglePath = function() {
-                        $scope.pathShown = lcpService.toggleLcpSourcePath($scope.results.data.geometry, "Least cost path elevation plot");
-                    };
-
-                    $scope.elevationLcpKml = function() {
-                        lcpService.elevationLcpKml();
-                    };
-
-                    $scope.elevationPath = function(label) {
-                        lcpService.elevationPath($scope.results.data.geometry, "Elevation plot of original path for least cost path");
-                    };
-
-                    $scope.toggleCostSurface = function() {
-                        $scope.costSurfaceShown = lcpService.toggleCostSurface({
-                            outline: $scope.urls.fullSegExtKml,
-                            image: $scope.urls.png,
-                            extent: $scope.urls.csExtKml
-                        });
-                    };
-                }],
-                link : function(scope, element, attrs) {
-                    scope.$watch("results.distance", function(newValue, oldValue) {
-                        if(newValue) {
-                            scope.pathShown = true;
-                            lcpService.showLcpSourcePath(scope.results.data.geometry);
-                        } else if(oldValue) {
-                            lcpService.reset();
-                        }
-                    });
-                }
-            };
-        }])
-
-        .directive("pathLeastCostSlider", [function() {
-            return {
-                template : '<slider min="0" max="1" step="0.1" ng-model="weighting.value" updateevent="slideStop" ng-disabled="!weighting.selected" ui-tooltip="hide"></slider>',
-                link : function() {}
-            };
-        }])
-
-        .factory('lcpService', ['$log', '$q', 'httpData', '$timeout', '$rootScope', 'mapHelper', 'flashService',
-            function($log, $q, httpData, $timeout, $rootScope, mapHelper, flashService) {
-                var pathGeometry;
-
-                var leastCostPathJob = "leastCostPath",
-                    layers = {
-                        pathBuffersKmlLayer:null,
-                        imageLayer:null,
-                        bufferKmlLayer:null,
-                        lcpSourcePath:null,
-                        pathKmlLayer:null
-                    },
-                    layerIndexes = [
-                        "pathBuffersKmlLayer",
-                        "imageLayer",
-                        "bufferKmlLayer",
-                        "lcpSourcePath",
-                        "pathKmlLayer"
-                    ],
-                    bufferExtent = null,
-                    notificationFlash = null,
-                    interimPath = null,
-                    lcpResults = {
-                        data: null,
-                        distance: null
-                    };
-
-                function isShowingLayer(name) {
-                    var layer = layers[name];
-                    return layer !== undefined && layer !== null;
-                }
-
-                function removeLayer(name) {
-                    var layer = layers[name];
-                    if(layer) {
-                        mapHelper.removeLayer(layer);
-                        layers[name] = null;
-                    }
-                }
-
-                function renderPaths() {
-                    var nonNullLayers = [];
-
-                    layerIndexes.forEach(function(layerName) {
-                        var layer = layers[layerName];
-                        if(layer) {
-                            nonNullLayers.push(layer);
-                            mapHelper.removeLayer(layer);
-                        }
-                    });
-
-                    mapHelper.addLayers(nonNullLayers);
-                }
-
-                function showInterimPath() {
-                     if (interimPath) mapHelper.removeLayer(interimPath);
-                     mapHelper.addLayer(interimPath = L.polyline(pathGeometry, {
-                         width: 2,
-                         color: '#000',
-                     }));
-                }
-
-                return {
-                    results : function() {
-                        return lcpResults;
-                    },
-
-                    reset: function() {
-                        lcpResults.data = pathGeometry = null;
-                        this.removePathKml();
-                        this.removeBufferKml();
-                        this.removeLcpSourcePath();
-                        this.removePathBuffers();
-                        this.removeCostSurface();
-                        if (interimPath) {
-                            mapHelper.removeLayer(interimPath);
-                            interimPath = null;
-                        }
-                    },
-
-                    triggerElevationPlot : function(data) {
-                        $rootScope.$broadcast("elevation.plot.data", data);
-                    },
-
-                    elevationPath : function(geometry, label) {
-                        var length = Exp.Util.toLineDistance(geometry);
-                        this.triggerElevationPlot({length:length, positions:geometry, heading:label});
-                    },
-
-                    elevationLcpKml : function() {
-                        var positions = layers.pathKmlLayer.getLatLngs();
-                        var distance = Exp.Util.toLineDistance(positions);
-                        this.triggerElevationPlot({length:distance, positions:positions, heading:"Least cost path elevation plot"});
-                    },
-
-                    bringToTop : function() {
-                        renderPaths();
-                    },
-
-                    removeLcpSourcePath : function() {
-                        removeLayer("lcpSourcePath");
-                    },
-
-                    removeBufferKml : function() {
-                        removeLayer("bufferKmlLayer");
-                    },
-
-                    removeCostSurface : function() {
-                        removeLayer("imageLayer");
-                    },
-
-                    removePathBuffers : function() {
-                        removeLayer("pathBuffersKmlLayer");
-                    },
-
-                    removePathKml : function() {
-                        removeLayer("pathKmlLayer");
-                    },
-
-                    zoomToBufferlLayer : function() {
-                        // Use the first in the list of entitiesDS
-                        layerIndexes.some(function(name) {
-                            var layer = layers[name];
-                            if(layer) {
-                                mapHelper.zoomToBounds(layer.getBounds());
-                                return true;
-                            }
-                            return false;
-                        });
-                    },
-
-                    toggleLcpSourcePath : function(geometry) {
-                        var showing = isShowingLayer("lcpSourcePath");
-                        if(showing) {
-                            this.removeLcpSourcePath();
-                        } else {
-                            this.showLcpSourcePath(geometry);
-                        }
-                        return !showing;
-                    },
-
-                    showLcpSourcePath : function(geometry) {
-                        this.removeLcpSourcePath();
-                        layers.lcpSourcePath = L.polyline(geometry, {
-                            width: 2,
-                            color: '#000',
-                        });
-                        renderPaths();
-                    },
-
-                    toggleCostSurface : function(imageExtent) {
-                        var showing = isShowingLayer("imageLayer");
-                        if(showing) {
-                            this.removeCostSurface();
-                            this.removePathBuffers();
-                        } else {
-                            this.showCostSurface(imageExtent);
-                        }
-                        return !showing;
-                    },
-
-                    showCostSurface : function( imageExtent) {
-                        this.removeCostSurface();
-                        // We render the outline first
-                        this.showPathBuffers(imageExtent.outline).then(function() {
-                            new L.KML(imageExtent.extent, { async: true }).on("loaded", function(e) {
-                                layers.imageLayer = L.imageOverlay(imageExtent.image, e.target.getBounds(), {
-                                    opacity: 0.7
-                                });
-                                renderPaths();
-                            });
-                        });
-                    },
-
-                    showPathBuffers : function(url) {
-                        var deferred = $q.defer();
-                        this.removePathBuffers();
-                        layers.pathBuffersKmlLayer = new L.KML(url, { async: true });
-                        layers.pathBuffersKmlLayer.on("loaded", function(e) {
-                            e.target.setStyle({
-                               width: 2,
-                                color: "#44ee11",
-                                fillColor: "#ccff77",
-                                fillOpacity: 0.15
-                            });
-                            deferred.resolve(e.target);
-                        });
-                        return deferred.promise;
-                    },
-
-                    toggleBufferKml : function(url) {
-                        var showing = isShowingLayer("bufferKmlLayer");
-                        if(showing) {
-                            this.removeBufferKml();
-                        } else {
-                            this.showBufferKml(url);
-                        }
-                        return !showing;
-                    },
-
-                    showBufferKml : function(url) {
-                        this.removeBufferKml();
-                        layers.bufferKmlLayer = new L.KML(url, { async: true });
-                        layers.bufferKmlLayer.on("loaded", function(e) {
-                            e.target.setStyle({
-                                width: 2,
-                                color: "#ff4411",
-                                fillColor: "#bbff55",
-                                fillOpacity: 0.3
-                            });
-                        });
-                        renderPaths();
-                    },
-
-                    togglePathKml : function(url) {
-                        var showing = isShowingLayer("pathKmlLayer");
-                        if(showing) {
-                            this.removePathKml();
-                        } else {
-                            this.showPathKml(url);
-                        }
-                        return !showing;
-                    },
-
-                    showPathKml : function(url) {
-                        this.removePathKml();
-                        layers.pathKmlLayer = new L.KML(url, { async: true });
-                        layers.pathKmlLayer.on("loaded", function(e) {
-                            e.target.setStyle({
-                                width: 2,
-                                color: "#ff9933",
-                                fillColor: "ffcc66",
-                                fillOpacity: 0.5
-                            });
-                        });
-                        renderPaths();
-                    },
-
-                    getResourceUrl : function(jobId, param) {
-                        var deferred = $q.defer();
-                        httpData.get("service/proxied/lcpService/jobs/" + jobId + "/results/" + param + "?f=json").then(function(response) {
-                            if(response.data && response.data.value) {
-                                deferred.resolve(response.data.value.url);
-                            }
-                            deferred.reject();
-                        });
-                        return deferred.promise;
-                    },
-
-                    getLeastCostPath : function(geometry, weightings, bufferPercent) {
-                        var wktStr = Exp.Util.toLineStringWkt(geometry),
-                            deferred = $q.defer(),
-                            weightArray = [],
-                            complete = false;
-
-                        showInterimPath();
-                        flashService.add("Initiating least cost path process...", 3000);
-
-                        $timeout(function() {
-                            if(!complete) {
-                                notificationFlash = flashService.add("Least cost path process is running.", 120000, true);
-                            }
-                        }, 4500);
-
-                        // We have to send the data as urlencoded parameters instead of JSON <doh/>
-                        angular.forEach(weightings, function(item, key) {
-                            if(item.selected) {
-                                weightArray.push('["' + key + '","' + item.label + '",' + item.value + "]");
-                            }
-                        });
-
-                        httpData.get("service/proxied/lcpService/submitJob", {
-                            params: {
-                                wkt : wktStr,
-                                wTable : "[" + weightArray.join() + "]",
-                                f : 'json',
-                                buffPct:bufferPercent,
-                                returnZ : false,
-                                returnM : false
-                            }
-                        }).then(function(response) {
-                            var jobId = response.data.jobId, count = 0;
-
-                            $timeout(poll, 12000);
-
-                            function poll() {
-                                count++;
-                                httpData.get("service/proxied/lcpService/jobs/" + jobId + "?f=json").then(function(message) {
-                                    var status = message.data.jobStatus;
-                                    if(status == "esriJobSucceeded" || status == "esriJobFailed") {
-                                        var screenMessage = "A least cost process has completed";
-                                        if(message.data && message.data.jobStatus == "esriJobFailed") {
-                                            screenMessage = "A least cost process has failed";
-                                        }
-                                        complete = true;
-                                        flashService.remove(notificationFlash);
-                                        flashService.add(screenMessage, 4000);
-
-                                        deferred.resolve(message);
-                                    } else if(count++ < 100 ) {
-                                        $timeout(poll, 4000);
-                                    }
-                                });
-                            }
-                        });
-                        return deferred.promise;
-                    },
-
-                    getPathGeometry : function() {
-                        return pathGeometry;
-                    },
-
-                    setPathGeometry : function(geometry) {
-                        pathGeometry = geometry;
-                    },
-
-                    weightings : function() {
-                        var deferred = $q.defer();
-
-                        httpData.get("resources/config/defaultLeastCostPathWeightings.json", {cache:true}).then(function(response) {
-                                deferred.resolve(response.data);
-                            },
-                            function(err) {
-                                deferred.reject({error:"E1100", text :"Failed to retrieve weightings"});
-                            });
-                        return deferred.promise;
-                    }
-                };
-            }])
-
-        .run(["$templateCache", function($templateCache) {
-            $templateCache.put("map/leastCostPath/draw.html",
-                    '<div class="popover bottom lcpPathDisplay" mars-lcp-path ng-show="show || resistanceCategories">' +
-                    '	<div class="arrow"></div>' +
-                    '	<div class="popover-inner">' +
-                    '		<div class="pathHeader">' +
-                    '			<span style="font-weight:bold">Least Cost Path</span><div style="float:right" ng-show="distance">{{(distance/1000) | number : 3}}km</div>' +
-                    '		</div>' +
-                    '       <div ng-hide="resistanceCategories">' +
-                    '		   <div ng-show="points.length == 0">Click on map to start path. Double click to end path.</div>' +
-                    '		   <div ng-show="points.length > 0">Drag vertices with mouse to change waypoints. Hover over waypoints and use the delete key to remove.</div>' +
-                    '		   <div style="font-weight:bold;text-align:center" ng-cloak ng-show="distance > 300000">Reduce the length of your path. <br/>A limit of 300k applies.</div>' +
-                    '		   <div class="buttons">' +
-                    '			  <button ng-show="points.length > 1" type="button" class="btn btn-default" style="width:98%;margin:2px" ng-click="pathComplete($event)" ng-disabled="distance > 300000">Least cost path...</button>' +
-                    '		   </div>' +
-                    '       </div>' +
-                    '	</div>' +
-                    '	<div least-cost-weightings weightings="resistanceCategories" path-geometry="pathGeometry" class="expWeightings" success="disable"></div>' +
-                    '</div>');
-        }])
-
-        .filter('lcpLookup', [function() {
-            // We use this to map to nice names on the UI for a given parameter name from ArcGIS least cost path service.
-            var lookup = {
-                "lcpKml" : {
-                    name: "Least cost path KML",
-                        fileType : "kml",
-                        fileName : "lcp.kml",
-                        showInGoogle : false
-                },
-                "lcpCorridorKml" : {
-                    name: "Least cost path buffer KML",
-                        fileType : "kml",
-                        fileName : "lcpCorridor.kml",
-                        showInGoogle : false
-                },
-                "cRasterKmz" : {
-                    name: "Cost surface KML",
-                        fileType : "kmz",
-                        fileName : "costRaster.kmz",
-                        showInGoogle : false
-                },
-                "combinedKMZ" : {
-                    name: "Combined KMZ",
-                        fileType : "kmz",
-                        fileName : "combinedKMZ",
-                        showInGoogle : true
-                },
-                "docPath" : {
-                    name: "Least cost path report",
-                        fileType : "pdf",
-                        fileName : "lcpReport.pdf",
-                        showInGoogle : true
-                }
-            };
-            return function(key, type) {
-                var value = lookup[key];
-                return (value || { name : key,	fileType: ""})[type || "name"];
-            };
-        }]);
-
-
-})(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 
 (function (angular, window, L) {
 
@@ -3795,33 +2567,6 @@ angular.module("explorer.mapstate", [])
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
 
-(function(angular){
-'use strict';
-
-angular.module("geo.measure", [])
-
-.directive("geoMeasure", ['$log', function($log) {
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		link : function(scope, element, attrs, ctrl) {
-			ctrl.getMap().then(function(map) {
-				L.Control.measureControl().addTo(map);
-				// TODO. See if it is useful
-				map.on("draw:drawstop", function(data) {
-					$log.info("Draw stopped");
-					$log.info(data);
-				});
-			});
-		}
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
 (function(angular, L) {
 
 'use strict';
@@ -3918,6 +2663,33 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 
 
 })(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular){
+'use strict';
+
+angular.module("geo.measure", [])
+
+.directive("geoMeasure", ['$log', function($log) {
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		link : function(scope, element, attrs, ctrl) {
+			ctrl.getMap().then(function(map) {
+				L.Control.measureControl().addTo(map);
+				// TODO. See if it is useful
+				map.on("draw:drawstop", function(data) {
+					$log.info("Draw stopped");
+					$log.info(data);
+				});
+			});
+		}
+	};
+}]);
+
+})(angular);
 (function () {
 
     "use strict";
@@ -5240,181 +4012,73 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 
 })(angular, L, window);
 
-/*!
- * Copyright 2016 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-/**
- * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
- */
-(function (angular, Exp) {
-    'use strict';
+L.Control.MousePosition = L.Control.extend({
+  options: {
+    position: 'bottomleft',
+    separator: ' : ',
+    emptyString: 'Unavailable',
+    lngFirst: false,
+    numDigits: 5,
+    elevGetter: undefined,
+    lngFormatter: undefined,
+    latFormatter: undefined,
+    prefix: ""
+  },
 
-    function TerrainLoader(options) {
-        options = options || {};
+  onAdd: function (map) {
+    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+    L.DomEvent.disableClickPropagation(this._container);
+    map.on('mousemove', this._onMouseMove, this);
+    this._container.innerHTML=this.options.emptyString;
+    return this._container;
+  },
 
-        this.load = function(url, onload, onerror) {
-            var request = new XMLHttpRequest();
+  onRemove: function (map) {
+    map.off('mousemove', this._onMouseMove);
+  },
 
-            request.addEventListener( 'load', function ( event ) {
-                var parser = new GeotiffParser();
-                parser.parseHeader(event.target.response);
-                onload(parser.loadPixels());
-            }, false );
+  _onMouseHover: function () {
+    var info = this._hoverInfo;
+    this._hoverInfo = undefined;
+    this.options.elevGetter(info).then(function(elevStr) {
+       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
+       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
+    }.bind(this));
+  },
 
-
-            if ( onerror !== undefined ) {
-                request.addEventListener( 'error', function ( event ) {
-                    onerror( event );
-                }, false );
-            }
-
-            if ( options.crossOrigin !== undefined ) {
-                request.crossOrigin = options.crossOrigin;
-            }
-
-            request.open( 'GET', url, true );
-            request.responseType = 'arraybuffer';
-            request.send( null );
-        };
-
-        this.setCrossOrigin = function( value ) {
-            options.crossOrigin = value;
+  _onMouseMove: function (e) {
+    var w = e.latlng.wrap();
+    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
+    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
+    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    if (this.options.elevGetter) {
+        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
+        this._hoverInfo = {
+            lat: w.lat,
+            lng: w.lng,
+            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
         };
     }
+    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
+  }
 
-    angular.module("geo.transect", ['explorer.config','explorer.feature.summary','explorer.flasher','geo.path'])
+});
 
-        .provider("transectService", function() {
-            var diagonal = 500,
-                layers = {},
-                ptElevationUrl,
-                extent = {
-                    lngMin: 112.99986111100009,
-                    lngMax: 153.999861113351,
-                    latMin: -44.0001389004617,
-                    latMax: -10.00013890099995
-                };
+L.Map.mergeOptions({
+    positionControl: false
+});
 
-            this.extent = function(newExtent) {
-                extent.lngMin = angular.isUndefined(newExtent.lngMin)? extent.lngMin: newExtent.lngMin;
-                extent.lngMax = angular.isUndefined(newExtent.lngMax)? extent.lngMax: newExtent.lngMax;
-                extent.latMin = angular.isUndefined(newExtent.latMin)? extent.latMin: newExtent.latMin;
-                extent.latMax = angular.isUndefined(newExtent.latMax)? extent.latMax: newExtent.latMax;
-            };
+L.Map.addInitHook(function () {
+    if (this.options.positionControl) {
+        this.positionControl = new L.Control.MousePosition();
+        this.addControl(this.positionControl);
+    }
+});
 
-            this.setServiceUrl = function(name, url) {
-                name = name.toLowerCase();
-                layers[name] = {
-                    urlTemplate: url
-                };
-                if (name === "elevation") ptElevationUrl = url.replace(/{height}|{width}/g,"1");
-            };
+L.control.mousePosition = function (options) {
+    return new L.Control.MousePosition(options);
+};
 
-            function calcSides(diagonal, ar) {
-                // x * x + ar * ar * x * x = diagonal * diagonal
-                // (1 + ar * ar) * x * x = diagonal * diagonal
-                // x * x = diagonal * diagonal / (1 + ar * ar)
-                var y = Math.sqrt(diagonal * diagonal / (1 + ar * ar));
-                return {y: Math.ceil(y), x: Math.ceil(y * ar)};
-            }
-
-            this.$get = ['$q', 'httpData', 'flashService', function ($q, httpData, flashService) {
-
-                return {
-                    getElevation: function (geometry, buffer) {
-                        return this.getServiceData("elevation", geometry, buffer);
-                    },
-
-                    getServiceData: function (name, geometry, buffer) {
-                        var flasher = flashService.add("Retrieving " + name + " details...", 8000),
-                            feature = Exp.Util.toGeoJSONFeature(geometry),
-                            bbox = turf.extent(feature),
-                            response  = {
-                                type: "FeatureCollection",
-                                features: []
-                            },
-                            lngMin = bbox[0],
-                            latMin = bbox[1],
-                            lngMax = bbox[2],
-                            latMax = bbox[3];
-
-                        // Sanity check for service url
-                        name = name.toLowerCase();
-                        var svcUrl = layers[name] && layers[name].urlTemplate;
-                        if (!svcUrl) return $q.when(response);
-
-                        // Sanity check for coordinates
-                        lngMax = lngMax > lngMin?lngMax:lngMin + 0.0001;
-                        latMax = latMax > latMin?latMax:latMin + 0.0001;
-                        var dx = lngMax - lngMin, dy = latMax - latMin;
-                        if (!buffer) buffer = 0;
-                        latMin = latMin - (buffer * dy);
-                        latMax = latMax + (buffer * dy);
-                        lngMin = lngMin - (buffer * dx);
-                        lngMax = lngMax + (buffer * dx);
-
-                        var xy = calcSides(diagonal, dx/dy),
-                            kiloms = turf.lineDistance(feature, "kilometers"),
-                            terrainLoader = new TerrainLoader(),
-                            deferred = $q.defer();
-                        svcUrl = svcUrl.replace("{bbox}", lngMin + "," + latMin + "," + lngMax + "," + latMax)
-                            .replace(/{width}/g, ""+Math.ceil(xy.x)).replace(/{height}/g, ""+Math.ceil(xy.y));
-                        terrainLoader.load(svcUrl, function(loaded) {
-//                            console.log("width: " + xy.x + ", height: " + xy.y + "calculated cells = " + (xy.x * xy.y) + " loaded length = " + loaded.length);
-
-                            var delta = kiloms / (diagonal - 1);
-                            for (var i = 0; i < diagonal; i++) {
-                                var deltaFeature = turf.along(feature, i * delta, "kilometers"),
-                                    height = toHeight(deltaFeature.geometry.coordinates);
-                                if (height > -32767) {
-                                    deltaFeature.geometry.coordinates.push(height);
-                                    response.features.push(deltaFeature);
-                                }
-                            }
-                            deferred.resolve(response);
-
-                            function toHeight(coord) {
-                                var x = coord[0], y = coord[1], zeroX = lngMin, zeroY = latMax,
-                                    cellY = Math.round((zeroY - y) / dy * (xy.y - 1)),
-                                    cellX = Math.round((x - zeroX) / dx * (xy.x - 1)),
-                                    index = cellY * xy.x + cellX;
-                                // console.log("Cell x = " + cellX + ", y = " + cellY + " Index = " + index + ", value = " + loaded[index]);
-                                return loaded[index];
-                            }
-                        }, function() {
-                            console.log("Failed to load transect data for " + name);
-                        });
-
-                        return deferred.promise;
-                    },
-
-                    isServiceDataAvailable: function (name) {
-                        return layers[name] && layers[name].urlTemplate;
-                    },
-
-                    getElevationAtPoint: function (latlng) {
-                        var lng = latlng.lng, lat = latlng.lat;
-                        if (lat < extent.latMin || lat > extent.latMax || lng < extent.lngMin || lng > extent.lngMax)
-                            return $q.when(null);
-
-                        var bbox = [
-                            lng - 0.000001,
-                            lat - 0.000001,
-                            lng + 0.000001,
-                            lat + 0.000001
-                        ];
-                        var deferred = $q.defer();
-                        new TerrainLoader().load(ptElevationUrl.replace("{bbox}", bbox.join(",")), function(elev) {
-                            deferred.resolve(elev);
-                        });
-                        return deferred.promise;
-                    }
-                };
-
-            }];
-        });
-
-})(angular, Exp);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -5469,94 +4133,6 @@ L.Control.Features = L.Control.extend({
 
 L.control.features = function (options) {
 	return new L.Control.Features(options);
-};
-	
-})(L);
-
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Legend = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-		overlayClass: 'leaflet-legend',
-	    className: 'fa fa-list',
-	    modal: false,
-		url: 'resources/img/NationalLegend.png'
-	},
-	
-	onAdd: function (map) {
-		var them = this;
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
-	    this._container.title = "Show legend";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent
-	            .on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(){
-	        them._active = !them._active;
-	       
-	        if(them._active) {
-	        	them._legend = L.control({position: 'topleft'});
-
-	        	them._legend.onAdd = function (map) {
-	        		var div = L.DomUtil.create('div', them.options.overlayClass),
-						html = '<img src="' + them.options.url + '"></img>';
-					
-					L.DomEvent.disableClickPropagation(div).disableScrollPropagation(div).on(div, 'keydown', function(event) {
-						if (event.keyCode == 24) {
-							this.scrollTop -= 20;
-							stop(event);
-						} else if (event.keyCode == 25) {
-							this.scrollTop += 20;
-							stop(event);
-						}
-						
-						function stop(event) {
-							event.stopPropogation();
-							event.preventDefault();
-						}
-					});
-						
-	        		div.innerHTML = html;
-					div.tabIndex = 0;
-					div.focus();
-	        		return div;
-	        	};
-	        	map.addControl(them._legend);
-	    		L.DomUtil.addClass(them._container, 'active');
-	        } else {
-				
-	        	map.removeControl(them._legend);
-				L.DomUtil.removeClass(them._container, 'active');
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.legend = function (options) {
-	return new L.Control.Legend(options);
 };
 	
 })(L);
@@ -5761,72 +4337,93 @@ L.Google.asyncInitialize = function() {
 	L.Google.asyncWait = [];
 };
 
-L.Control.MousePosition = L.Control.extend({
-  options: {
-    position: 'bottomleft',
-    separator: ' : ',
-    emptyString: 'Unavailable',
-    lngFirst: false,
-    numDigits: 5,
-    elevGetter: undefined,
-    lngFormatter: undefined,
-    latFormatter: undefined,
-    prefix: ""
-  },
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 
-  onAdd: function (map) {
-    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
-    L.DomEvent.disableClickPropagation(this._container);
-    map.on('mousemove', this._onMouseMove, this);
-    this._container.innerHTML=this.options.emptyString;
-    return this._container;
-  },
+(function(L) {
 
-  onRemove: function (map) {
-    map.off('mousemove', this._onMouseMove);
-  },
+'use strict';
 
-  _onMouseHover: function () {
-    var info = this._hoverInfo;
-    this._hoverInfo = undefined;
-    this.options.elevGetter(info).then(function(elevStr) {
-       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
-       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
-    }.bind(this));
-  },
+L.Control.Legend = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+		overlayClass: 'leaflet-legend',
+	    className: 'fa fa-list',
+	    modal: false,
+		url: 'resources/img/NationalLegend.png'
+	},
+	
+	onAdd: function (map) {
+		var them = this;
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-legend-control leaflet-bar');
+	    this._container.title = "Show legend";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
 
-  _onMouseMove: function (e) {
-    var w = e.latlng.wrap();
-    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
-    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
-    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    if (this.options.elevGetter) {
-        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
-        this._hoverInfo = {
-            lat: w.lat,
-            lng: w.lng,
-            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
-        };
-    }
-    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
-  }
+        L.DomEvent
+	            .on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(){
+	        them._active = !them._active;
+	       
+	        if(them._active) {
+	        	them._legend = L.control({position: 'topleft'});
 
+	        	them._legend.onAdd = function (map) {
+	        		var div = L.DomUtil.create('div', them.options.overlayClass),
+						html = '<img src="' + them.options.url + '"></img>';
+					
+					L.DomEvent.disableClickPropagation(div).disableScrollPropagation(div).on(div, 'keydown', function(event) {
+						if (event.keyCode == 24) {
+							this.scrollTop -= 20;
+							stop(event);
+						} else if (event.keyCode == 25) {
+							this.scrollTop += 20;
+							stop(event);
+						}
+						
+						function stop(event) {
+							event.stopPropogation();
+							event.preventDefault();
+						}
+					});
+						
+	        		div.innerHTML = html;
+					div.tabIndex = 0;
+					div.focus();
+	        		return div;
+	        	};
+	        	map.addControl(them._legend);
+	    		L.DomUtil.addClass(them._container, 'active');
+	        } else {
+				
+	        	map.removeControl(them._legend);
+				L.DomUtil.removeClass(them._container, 'active');
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
 });
 
-L.Map.mergeOptions({
-    positionControl: false
-});
-
-L.Map.addInitHook(function () {
-    if (this.options.positionControl) {
-        this.positionControl = new L.Control.MousePosition();
-        this.addControl(this.positionControl);
-    }
-});
-
-L.control.mousePosition = function (options) {
-    return new L.Control.MousePosition(options);
+L.control.legend = function (options) {
+	return new L.Control.Legend(options);
 };
+	
+})(L);
 
 L.Control.ZoomBox = L.Control.extend({
     _active: false,
@@ -6018,7 +4615,7 @@ angular.module("geo.map", [])
 
 .directive("geoMap", ["mapService", "waiting", function(mapService, waiting) {
 	var waiters;
-	
+
 	return {
 		restrict: "AE",
 		scope : {
@@ -6036,7 +4633,7 @@ angular.module("geo.map", [])
 				}
 			};
 		}],
-		
+
 		link : function(scope, element) {
 			scope.$watch("configuration" , function(config) {
 				if(config) {
@@ -6047,7 +4644,7 @@ angular.module("geo.map", [])
 					}
 				}
 			});
-			
+
 		}
 	};
 }])
@@ -6063,12 +4660,12 @@ angular.module("geo.map", [])
 		service = {
 			maps: {}
 		};
-	
+
 	service.getMap = function(name) {
 		if(!name) {
 			name = lastMap;
 		}
-		
+
 		if(lastMap) {
 			return $q.when(service.maps[name]);
 		}
@@ -6076,11 +4673,11 @@ angular.module("geo.map", [])
 		if(!waiters) {
 			waiters = waiting.wait();
 		}
-		return waiters.waiter().promise;	
+		return waiters.waiter().promise;
 	};
 
 	service.addToGroup = function(layer, groupName) {
-		this.getMap().then(function(map) { 
+		this.getMap().then(function(map) {
 			var group = groups[groupName];
 			if(group) {
 				addLayer(layer, group, map);
@@ -6091,16 +4688,16 @@ angular.module("geo.map", [])
 	service.getGroup = function(groupName) {
 		return groups[groupName];
 	};
-	
+
 	service.clearGroup = function(groupName) {
 		var layerGroup = groups[groupName],
 			layers = layerGroup.getLayers();
-		
+
 		layers.forEach(function(layer) {
 			layerGroup.removeLayer(layer);
-		});	
+		});
 	};
-	
+
 	service.removeFromGroup = function(data, groupName) {
 		var group = groups[groupName];
 		if(group) {
@@ -6112,17 +4709,17 @@ angular.module("geo.map", [])
     service.getGridLayer = function() {
         return gridLayer;
     };
-	
+
 	service.addMap = function(config) {
 		var map,
 			legendControlOptions = null;
-		
+
 		if(!config.name) {
 			config.name = START_NAME + (nameIndex++);
 		}
-		
+
 		lastMap = config.name;
-		
+
 		map = service.maps[config.name] = new L.Map(config.element, {
             center: config.options.center,
             zoom: config.options.zoom,
@@ -6156,19 +4753,11 @@ angular.module("geo.map", [])
 			});
 		}
 
-        var elevGetter, transectSvc = $injector.get('transectService');
-        if (transectSvc.isServiceDataAvailable("elevation")) {
-            elevGetter = function(latlng) {
-                return transectSvc.getElevationAtPoint(latlng).then(function(elev) {
-                    if (elev === null) return '';
-                    return "Elev: " + $filter('length')(Math.round(elev), true);
-                });
-            };
-        }
+        var elevGetter;
 
 		L.control.scale({imperial:false}).addTo(map);
 		L.control.mousePosition({
-				position:"bottomright", 
+				position:"bottomright",
 				emptyString:"",
 				seperator : " ",
                 elevGetter: elevGetter,
@@ -6197,33 +4786,33 @@ angular.module("geo.map", [])
 		if(legendControlOptions) {
 			map.addControl(L.control.legend(legendControlOptions));
 		}
-		
+
 		return map;
-		
+
 	};
-	
+
 	return service;
 
 	function addLayer(layer, target, map) {
 		var leafLayer = expandLayer(layer);
 		leafLayer.pseudoBaseLayer = layer.pseudoBaseLayer;
-		
+
 		if(layer.addLayerControl) {
 			if(!layerControl) {
 				layerControl = {};
-			} 
+			}
 			layerControl[layer.name] = leafLayer;
 		}
 		if(layer.defaultLayer || layer.pseudoBaseLayer) {
 			target.addLayer(leafLayer);
 		}
-		
+
 		if(layerControl) {
 			map.addControl(new L.Control.Layers( layerControl, {}));
 		}
 		layer.layer = leafLayer;
 	}
-	
+
 	function expandLayer(data) {
 		var Clazz = [];
 		if(angular.isArray(data.type)) {
@@ -6236,19 +4825,15 @@ angular.module("geo.map", [])
 		}
 		if(data.parameters && data.parameters.length > 0) {
 			return new Clazz(data.parameters[0], data.parameters[1], data.parameters[2], data.parameters[3], data.parameters[4]);
-		} 
+		}
 		return new Clazz();
 	}
-	
+
 }]);
 
 })(angular, L, window);
-angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/baselayer/baseLayerSlider.html","<span style=\"width:30em;\">\r\n	<span id=\"baselayerCtrl\">\r\n 		<input id=\"baselayerSlider\" class=\"temperature\" baselayer-slider title=\"Slide to emphasize either a satellite or topography view.\" />\r\n	</span>\r\n</span>");
-$templateCache.put("map/chartTransect/chartTransect.html","<div id=\"transectChart\" ng-style=\"{ \'width\': transectChartService.minPanelWidth }\" ng-show=\"chartState.targetChartId == \'transectChart\'\">\r\n\r\n	<div ng-show=\"transectChartService.faultTransected\"\r\n		 class=\"fault-legend danger-pulse\" ng-class=\"{\'danger-pulse\': transectChartService.faultTransected}\"\r\n		 tooltip=\"Faults are not ideal for CCS..\"\r\n		 tooltip-placement=\"left\">\r\n		<span class=\"fault-legend-color\"></span>\r\n		<strong> Known Faults Transected <i class=\"fa fa-exclamation-triangle\"></i></strong>\r\n	</div>\r\n\r\n	<div id=\"transectChartD3Legend\" class=\"clear-float\">\r\n\r\n		<div class=\"btn-group\" style=\"float: right; margin: -10px 0px 20px 0px\">\r\n			<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\"\r\n					ng-click=\"showInfo = !showInfo\">\r\n				<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n			</button>\r\n\r\n			<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"transectChartService.hideChart()\">\r\n				<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n			</button>\r\n		</div>\r\n\r\n		<div ng-repeat=\"property in transectChartService.properties\" class=\"clear-float\" tooltip=\"{{property.description}}\" tooltip-placement=\"left\">\r\n			<p>\r\n				<span ng-style=\"{ \'background\': property.color }\" class=\"rect\"></span>\r\n				<strong>{{ property.label }} Z (m) </strong>\r\n				<code ng-if=\"transectChartService.targetData && transectChartService.targetData[property.name]\"> {{ transectChartService.targetData[property.name].z | number: 3}}</code>\r\n				<code ng-if=\"!transectChartService.targetData || !transectChartService.targetData[property.name]\"> -- </code>\r\n			</p>\r\n		</div>\r\n\r\n		<div class=\"clear-float\">\r\n			<p tooltip=\"Closest x value to you cursor\'s position\" tooltip-placement=\"left\">\r\n				<strong>X</strong>\r\n				<code ng-if=\"transectChartService.targetData\">{{transectChartService.targetData.x | number: 3}}</code>\r\n				<code ng-if=\"!transectChartService.targetData\"> -- </code>\r\n			</p>\r\n			<p tooltip=\"Closest y value to you cursor\'s position\" tooltip-placement=\"left\">\r\n				<strong>Y</strong>\r\n				<code ng-if=\"transectChartService.targetData\">{{transectChartService.targetData.y | number: 3}}</code>\r\n				<code ng-if=\"!transectChartService.targetData\"> -- </code>\r\n			</p>\r\n		</div>\r\n\r\n	</div>\r\n\r\n	<div id=\"transectChartD3\"></div>\r\n\r\n</div>");
-$templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\r\n	<div class=\"row\">\r\n		<div class=\"col-md-4\">\r\n			<span class=\"graph-brand\">Path Elevation</span>\r\n		</div>	\r\n		<div class=\"col-md-8\">\r\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\r\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\r\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \r\n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\r\n				</div>	\r\n				<div class=\"btn-group\">	\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \r\n							ng-click=\"showInfo = !showInfo\">\r\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>\r\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" show-close=\"true\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\r\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>				\r\n				</div>\r\n			</div>\r\n		</div>	\r\n	</div>\r\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\r\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\r\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\r\n	<div class=\"elevationHoverPanel\" mars-point-info ng-show=\"position\"\r\n		ng-attr-style=\"top:{{position.pageY - 70}}px;left:{{position.pageX * 0.94 - 10}}px;\">\r\n		<div class=\"ng-binding\"><strong>Elev.:</strong>{{position.point.z|number:0}}m</div>\r\n		<div class=\"ng-binding\"><strong>Dist.:</strong>{{length * position.percentX * 0.01|length : true }}</div>\r\n	</div>\r\n	</div>\r\n</div>");
+angular.module("explorer.map.templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("map/elevation/elevation.html","<div class=\"container-full elevationContainer\" ng-show=\"geometry\" style=\"background-color:white; opacity:0.9;padding:2px\">\r\n	<div class=\"row\">\r\n		<div class=\"col-md-4\">\r\n			<span class=\"graph-brand\">Path Elevation</span>\r\n		</div>	\r\n		<div class=\"col-md-8\">\r\n			<div class=\"btn-toolbar pull-right\" role=\"toolbar\" style=\"margin-right: 3px;\">\r\n				<div class=\"btn-group\" ng-show=\"intersectsWaterTable\">	\r\n					<button type=\"button\" class=\"btn btn-default\" ng-click=\"toggleWaterTable()\" \r\n							title=\"Show groundwater over elevation\">{{paths.length == 1?\'Show\':\'Hide\'}} Water Table</button>\r\n				</div>	\r\n				<div class=\"btn-group\">	\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Find out information about the data behind these graphs\" \r\n							ng-click=\"showInfo = !showInfo\">\r\n						<i class=\"fa fa-info-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>\r\n					<exp-info title=\"Graph Information\" style=\"width:400px;position:absolute;bottom:-80px;right:60px\" show-close=\"true\" is-open=\"showInfo\"><div mars-info-elevation></div></exp-info>				\r\n					<button type=\"button\" class=\"btn btn-default\" title=\"Close graphs\" ng-click=\"close()\">\r\n						<i class=\"fa fa-times-circle\" role=\"presentation\" style=\"font-size:16px; color:black\"></i>\r\n					</button>				\r\n				</div>\r\n			</div>\r\n		</div>	\r\n	</div>\r\n	<div explorer-graph data=\"paths\" config=\"config\" click=\"graphClick(event)\" move=\"graphMove(event)\" leave=\"graphLeave(event)\" enter=\"graphEnter(event)\" show-zero-line=\"true\"></div>\r\n	<div exp-point-features features=\"featuresUnderPoint\" class=\"featuresUnderPoint\"></div>\r\n	<div exp-point point=\"point\" class=\"featuresInfo\" style=\"display:none\"></div>\r\n	<div class=\"elevationHoverPanel\" mars-point-info ng-show=\"position\"\r\n		ng-attr-style=\"top:{{position.pageY - 70}}px;left:{{position.pageX * 0.94 - 10}}px;\">\r\n		<div class=\"ng-binding\"><strong>Elev.:</strong>{{position.point.z|number:0}}m</div>\r\n		<div class=\"ng-binding\"><strong>Dist.:</strong>{{length * position.percentX * 0.01|length : true }}</div>\r\n	</div>\r\n	</div>\r\n</div>");
 $templateCache.put("map/elevation/elevationInfo.html","<div>\r\nThe elevation graph is calculated from the 3\" DEM data. \r\nThe data is held in a grid with a cell size of approx. 90 m. \r\nThe data has a &plusmn;5 m error. Full metadata about the data and how to acquire the data can be found \r\n<a target=\"_blank\" href=\"http://www.ga.gov.au/metadata-gateway/metadata/record/gcat_aac46307-fce9-449d-e044-00144fdd4fa6\">here</a>\r\n<br/>\r\nIf the path of the graph intersects areas that we have prepared water table data there will be the ability to plot this data. \r\nThe accuracy is not as high as the elevation data and has &plusmn;50 m error. Smoothing with this error can make the \r\nwater table appear above the elevation of the surface on occasions. \r\nData availability will be indicated by the button labelled \"Show Water Table\". \r\n<a href=\"javascript:;\" ng-click=\"toggleWaterTableShowing()\">Click to {{state.isWaterTableShowing?\'hide\':\'view\'}} the water table extent.</a>\r\n</div>\r\n");
 $templateCache.put("map/featuresummary/featuresSummary.html","<div class=\"marsfeatures\" ng-show=\"features\" ng-style=\"featurePanelPosition()\" ng-class=\"features.popupClass\">\r\n	<div id=\"menu_mn_active_tt_active\" data-role=\"popup\" role=\"tooltip\">\r\n		<div class=\"pathContent\">\r\n			<div ng-repeat=\"(key, feature) in features.data\">\r\n				{{mappings[key].title}}  ({{feature}})\r\n			</div>\r\n			<div ng-hide=\"features.count\">No nearby features</div>\r\n		</div>\r\n	</div>\r\n</div>\r\n");
 $templateCache.put("map/layerinspector/layerInspector.html","<div class=\"interactionPanel\">\r\n	<div class=\"exp-block\" ng-show=\"active\" style=\"height:100%\">\r\n		<div class=\"exp-header\">\r\n			<div class=\"interactionPanelHeader\" ng-hide=\"hidename\">\r\n				<a href=\"javascript:;\" ng-click=\"click()\" ng-show=\"showClose\" title=\"Name is {{name || active.name}}\">{{name || active.name}}</a>\r\n				<span ng-hide=\"showClose\">{{name || active.name}}</span>\r\n			</div>\r\n			<div style=\"float:right\">\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\" \r\n						ng-click=\"toggleShow(active)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!active.displayed), \'fa-eye\':active.displayed}\"></i></a>\r\n				<a class=\"featureLink\" href=\"javascript:;\" title=\"Collapse extra information\" ng-show=\"showClose\"\r\n						ng-click=\"click()\"><i class=\"fa fa-caret-square-o-up\"></i></a>\r\n			</div>\r\n		</div>\r\n		<div>\r\n			<div class=\"thumbNailContainer\" ng-show=\"active.thumbUrl\">\r\n				<img width=\"100\" ng-src=\"{{active.thumbUrl}}\" class=\"img-thumbnail\" alt=\"{{active.description}}\"></img>\r\n			</div>\r\n			<strong>Opacity</strong><br/>\r\n			<span explorer-layer-slider layer=\"active.layer\" title=\"Change the opacity of the selected layer when shown on the map\" class=\"opacitySlider\"></span>\r\n			<p/>\r\n			{{active.description}}\r\n		</div> \r\n	</div>\r\n</div>");
-$templateCache.put("map/leastCostPath/leastCostDisplay.html","\r\n<exp-modal is-open=\"results.data\" style=\"position:fixed;top:132px;left:42px\" title=\"Least cost path control panel\" on-close=\"clear()\">\r\n    <div ng-if=\"results.data.jobStatus != \'esriJobFailed\'\" class=\"esriLcpSuccess\">\r\n        <div>\r\n            <div>\r\n                <div style=\"float:left;font-zize:120%; font-weight:bold; padding:5px;\">View...</div>\r\n                <div style=\"float:right\">\r\n                    <a class=\"featureLink\" href=\"javascript:;\" title=\"Bring least cost path layers to the top of the map.\"\r\n                       ng-click=\"bringToTop()\"><i class=\"fa fa-arrow-up\"></i> </a>\r\n                </div>\r\n                <div ng-mouseenter=\"mouseenterPath()\" ng-mouseleave=\"mouseleavePath()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Original drawn path\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Plot elevation for path.\"\r\n                               ng-click=\"elevationPath()\"><i class=\"fa fa-align-left fa-rotate-270\"></i> </a>\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing original drawn path on map\"\r\n                               ng-click=\"togglePath()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!pathShown), \'fa-eye\':pathShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n                <div ng-mouseenter=\"mouseenterLcp()\" ng-mouseleave=\"mouseleaveLcp()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Least cost path\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Plot elevation for least cost path.\"\r\n                               ng-click=\"elevationLcpKml()\"><i class=\"fa fa-align-left fa-rotate-270\"></i> </a>\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing least cost path on map\"\r\n                               ng-click=\"toggleLcpKml()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!lcpKmlShown), \'fa-eye\':lcpKmlShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n\r\n                <div ng-mouseenter=\"mouseenterLcpBuffer()\" ng-mouseleave=\"mouseleaveLcpBuffer()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Least cost path buffer\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing least cost path buffer on map\"\r\n                               ng-click=\"toggleLcpBufferKml()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!lcpBufferKmlShown), \'fa-eye\':lcpBufferKmlShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n                <div ng-mouseenter=\"mouseenterCostSurface()\" ng-mouseleave=\"mouseleaveCostSurface()\" style=\"clear:both\">\r\n                    <div>\r\n                        <div style=\"float: left;padding-left:16px\">\r\n                            Cost surface\r\n                        </div>\r\n                        <div style=\"float: right\">\r\n                            <a class=\"featureLink\" href=\"javascript:;\" title=\"Toggle showing cost surface on map\"\r\n                               ng-click=\"toggleCostSurface()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!costSurfaceShown), \'fa-eye\':costSurfaceShown}\"></i></a>\r\n                        </div>\r\n                    </div>\r\n                </div>\r\n\r\n                <button type=\"button\" class=\"btn btn-default\" style=\"margin:2px;width:90%\" ng-click=\"zoomToCentre()\">Zoom to least cost path.</button>\r\n            </div>\r\n            <br/>\r\n            <div>\r\n                <div style=\"font-zize:120%; font-weight:bold; padding:5px;\" title=\"Requires that you have Google Earth installed and associated with KML and KMZ files.\">Link to Google Earth...</div>\r\n                <div ng-repeat=\"(key, result) in results.data.results\" ng-show=\"key | lcpLookup : \'showInGoogle\'\">\r\n                    <a target=\"_blank\" ng-href=\"{{urls[key]}}\" style=\"margin:3px;width:14em;display:inline-block\">{{key | lcpLookup}}</a> ({{key | lcpLookup : \"fileType\"}})<br/>\r\n                </div>\r\n            </div>\r\n        </div>\r\n    </div>\r\n    <div ng-if=\"results.data.jobStatus == \'esriJobFailed\'\">\r\n        <div>\r\n            The least cost path process failed. You may be able to help provide<br/>\r\n            information to assist the resolution of this problem by reporting:\r\n			<pre>ESRI Least cost path processing failed.\r\nTime: {{results.data.timeStamp | date : \'d/M/yyyy hh:mm:ss a\'}}\r\nJob ID: {{results.data.jobId}}</pre>\r\n        </div>\r\n    </div>\r\n    <div style=\"clear:both;padding:5px;text-align:center\"></div>\r\n</exp-modal>");
-$templateCache.put("map/leastCostPath/leastCostWeightings.html","<div class=\"expWeightings\">\r\n    <div class=\"panel-group\" id=\"accordion\">\r\n        <div class=\"panel panel-default\" ng-repeat=\"category in weightings\"  ng-show=\"category.group.length\">\r\n            <div class=\"panel-heading\">\r\n                {{category.label}}\r\n            </div>\r\n            <div id=\"collapseOne\" class=\"panel-collapse collapse in\">\r\n                <div class=\"panel-body\">\r\n                    <div ng-repeat=\"weighting in category.group\" class=\"lcpSlider\">\r\n                        <div style=\"float:left\">\r\n                            <input type=\"checkbox\" ng-model=\"weighting.selected\" class=\"fixAlignment\" />\r\n                            <span class=\"leastCostPathLabel\" ng-class=\"{disabled:!weighting.selected}\">{{weighting.label}}</span>\r\n                        </div>\r\n                        <span style=\"width:180px;float:right;margin-right:20px\" path-least-cost-slider></span>\r\n                        <div style=\"clear:both\"></div>\r\n                    </div>\r\n                </div>\r\n            </div>\r\n        </div>\r\n    </div>\r\n    <div style=\"padding-left:7px;padding-bottom:7px\">\r\n        <label for=\"lcpBufferSelect\">Path bounding box buffered by:</label>\r\n        <select ng-model=\"bufferPercent\" ng-options=\"k as v for (k, v) in bufferValues\"></select>%\r\n    </div>\r\n    <div class=\"buttons\" style=\"float:right\">\r\n        <button type=\"button\" class=\"btn btn-default\" style=\"width:6em;margin:2px\" ng-click=\"cancelLeastCostPath()\" title=\"Cancel calculation of least cost path\">Cancel</button>\r\n        <button type=\"button\" class=\"btn btn-default focusMe\" style=\"width:6em;margin:2px\" ng-click=\"showLeastCostPath($event)\" title=\"Confirm to continue calculation of least cost path\">Continue</button>\r\n    </div>\r\n    <div style=\"clear:both;text-align:center\"><strong>Note:</strong>The processing can take a while.<br/>You will be notified when the process is complete.</div>\r\n</div>");
 $templateCache.put("map/point/point.html","<exp-modal class=\"pointInspector ng-cloak\" icon-class=\"fa-map-marker\" is-open=\"point\" on-close=\"clearPoint()\" title=\"Features within approx. 2km\">	\r\n	<div class=\"pointContent\" ng-controller=\"OverFeatureCtrl as over\">\r\n		<div style=\"padding-bottom:7px;\">Elev. {{point.z | length : true}}, Lat. {{point.y | number : 3}}&deg;, Long. {{point.x | number:3}}&deg;</div>\r\n		<div ng-show=\"featuresInfo.results.length > 0\">\r\n			<div>\r\n				<div style=\"float:left; padding-bottom:10px\">{{allHidden() && \"Show\" || \"Hide\"}} all features</div>\r\n				<div style=\"float: right\">				\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show all features on map\"\r\n						ng-click=\"toggleAll()\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':allHidden(), \'fa-eye\':!allHidden()}\"></i></a>\r\n				</div>\r\n			</div>\r\n			<div style=\"clear:both;\"></div>\r\n		</div>\r\n		<div ng-hide=\"featuresInfo.results.length > 0\">No nearby features.</div>\r\n	\r\n		<div ng-repeat=\"item in featuresInfo.results | featureGroups\" ng-class=\"{\'underlined\':!$last}\">\r\n			<div ng-show=\"greaterThanOneItem()\"  ng-mouseover=\"over.groupEnter(featuresInfo.results, item)\" ng-mouseout=\"over.groupLeave(featuresInfo.results, item)\">\r\n				<div style=\"float:left\">\r\n					<button type=\"button\" class=\"undecorated\" ng-click=\"expanded = !expanded\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':expanded,\'fa-caret-right\':(!expanded)}\"></i></button></button><strong>{{metadata[item].heading}}</strong>\r\n				</div>\r\n				<div style=\"float: right\">	\r\n					<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"   \r\n						ng-click=\"groupShow(item)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!oneShowing()), \'fa-eye\':oneShowing()}\"></i></a>\r\n				</div>\r\n				<div style=\"clear:both;\"></div>\r\n			</div>\r\n			<div ng-repeat=\"feature in featuresInfo.results | filterGroupsByLayername : item\" ng-show=\"expanded || !greaterThanOneItem()\">\r\n				<div ng-mouseover=\"over.mouseenter(feature)\" ng-mouseout=\"over.mouseleave(feature)\" ng-click=\"over.click()\">\r\n					<div style=\"float: left;\" ng-class=\"{\'pad-left-big\':greaterThanOneItem()}\">\r\n						<button type=\"button\" ng-click=\"feature.expanded = !feature.expanded\" class=\"undecorated\"><i class=\"fa fa-caret-right pad-right\" ng-class=\"{\'fa-caret-down\':feature.expanded,\'fa-caret-right\':(!feature.expanded)}\"></i></button>\r\n						<a href=\"javascript:;\" class=\"featureLink\" title=\"{{metadata[feature.layerName].description}}\"\r\n							ng-click=\"makeFeatureActive()\" ng-class=\"{active:(feature.active)}\">{{createTitle()}}</a>\r\n					</div>\r\n					<div style=\"float: right\">	\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Graph elevation changes for feature\'s path.\"\r\n							ng-click=\"elevationPath(metadata[feature.layerName].label + \' elevation plot\')\"><i class=\"fa fa-align-left fa-rotate-270\" ng-show=\"feature.geometryType == \'esriGeometryPolyline\'\"></i></a>					\r\n						<a class=\"featureLink\" href=\"javascript:;\" title=\"Show on map\"\r\n							ng-click=\"toggleShow(feature)\"><i class=\"fa\" ng-class=\"{\'fa-eye-slash\':(!feature.displayed), \'fa-eye\':feature.displayed}\"></i> </a>\r\n					</div>\r\n				</div>\r\n				<div style=\"clear:both;\" ng-init=\"featureMeta = metadata[feature.layerName]\">\r\n					<div ng-repeat=\"attribute in featureMeta.attributes\" ng-show=\"feature.expanded\">\r\n						<div style=\"width:7em;float:left;font-weight:bold;padding-left:9px\">{{attribute.label}}</div>\r\n						<div style=\"min-width:12em;width:12em;margin-left:7.5em;\" class=\"ellipsis\" title=\"{{feature.attributes[attribute.key]}}\">{{feature.attributes[attribute.key] | dashNull}}</div>\r\n					</div>\r\n					<div style=\"border-bottom:1px solid lightgray\" ng-show=\"feature.expanded && !last\"></div>\r\n				</div>\r\n			</div>	\r\n		</div>\r\n	</div>\r\n</exp-modal>");}]);

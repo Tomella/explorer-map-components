@@ -1,23 +1,4 @@
-/* Leaflet Specific */
 
-.leaflet-container .leaflet-control-mouseposition {
-  position: relative;
-  bottom: 5px;
-  right: 0;
-  font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
-  min-width: 16em;
-}
-
-.leaflet-control-scale-line {
-  position: relative;
-  bottom: 20px;
-}
-
-/* App Look and Feel specific */
-
-.slider.slider-horizontal {
-  width: 180px;
-}
 input.base-layer-input {
   -webkit-appearance: none;
   margin: 3px 0;
@@ -121,39 +102,6 @@ input.base-layer-input:focus::-ms-fill-upper {
 }
 
 input.base-layer-input::-ms-tooltip {
-  display: none;
-}
-.elevationHoverPanel {
-  position: fixed;
-  z-index: 1;
-  background-color: white;
-  width: 8em;
-  border: 1px solid black;
-  border-radius: 5px;
-  padding: 5px;
-  box-shadow: 5px 5px 5px gray;
-}
-.leaflet-container .leaflet-control-mouseposition {
-  background-color: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 0 5px #bbb;
-  padding: 0 5px;
-  margin: 0;
-  color: #333;
-  font: 11px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
-}
-.active.leaflet-bar.leaflet-legend-control a {
-  color: #FFF;
-  background: #666;
-}
-.leaflet-zoom-box-control {
-  font-size: 18px;
+    display: none;
 }
 
-.leaflet-zoom-box-control.active a {
-  color: #FFF;
-  background: #666;
-}
-
-.leaflet-zoom-box-crosshair {
-  cursor: crosshair !important;
-}
