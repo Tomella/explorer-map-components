@@ -215,11 +215,26 @@ angular.module("geo.map", [])
 			Clazz = L[data.type];
 		}
 		if(data.parameters && data.parameters.length > 0) {
-			return new Clazz(data.parameters[0], data.parameters[1], data.parameters[2], data.parameters[3], data.parameters[4]);
+         var options = data.parameters[1];
+         if (options) {
+            options = transformOptions(options);
+         }
+			return new Clazz(data.parameters[0], options, data.parameters[2], data.parameters[3], data.parameters[4]);
 		}
 		return new Clazz();
 	}
 
+   function transformOptions(options) {
+      if (options.bounds && angular.isArray(options.bounds)) {
+         var bounds = options.bounds;
+         var ll = bounds[0];
+         var ur = bounds[1];
+         if (angular.isArray(ll) && angular.isArray(ur)) {
+            options.bounds = L.latLngBounds(bounds);
+         }
+      }
+      return options;
+   }
 }]);
 
 })(angular, L, window);

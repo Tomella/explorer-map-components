@@ -1099,53 +1099,6 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L) {
-
-'use strict';
-
-angular.module("explorer.crosshair", ['geo.map'])
-
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
-	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
-	});
-	
-	return {		
-		add : function(point) {
-            this.move(point);
-		},
-		
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null; 
-			}
-		},
-		
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
-
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
-}]);
-
-})(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 
 (function(angular){
 'use strict';
@@ -1408,46 +1361,6 @@ angular.module('geo.drawhelper', ['geo.map'])
 }]);
 
 })(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular, L){
-'use strict';
-
-angular.module("geo.extent", [])
-
-.directive("geoExtent", ['$log', function($log) {
-	// We are Australia.
-	var DEFAULT_OPTIONS = {
-        center:[-28, 135],
-        zoom:5
-	};
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		scope : {
-			options: "="
-		},
-		link : function(scope, element, attrs, ctrl) {
-			if(typeof scope.options == "undefined") {
-				scope.options = {};
-			}
-			if(typeof scope.options.center == "undefined") {
-				scope.options.center = DEFAULT_OPTIONS.center;
-			} 
-			if(typeof scope.options.zoom == "undefined") {
-				scope.options.zoom = DEFAULT_OPTIONS.zoom;
-			}
-			
-			ctrl.getMap().then(function(map) {
-				L.control.zoommin(scope.options).addTo(map);
-			});
-		}
-	};
-}]);
-
-})(angular, L);
-
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1814,115 +1727,93 @@ angular.module("geo.elevation", [
 
 })(angular, Exp, L);
 
-(function (angular, google, window) {
-
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L){
 'use strict';
 
-angular.module('geo.geosearch', ['ngAutocomplete'])
+angular.module("geo.extent", [])
 
-.directive("expSearch", [function() {
+.directive("geoExtent", ['$log', function($log) {
+	// We are Australia.
+	var DEFAULT_OPTIONS = {
+        center:[-28, 135],
+        zoom:5
+	};
 	return {
-		templateUrl : "components/geosearch/search.html",
+		require : "^geoMap",
+		restrict : "AE",
 		scope : {
-			hideTo:"="
+			options: "="
 		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
+		link : function(scope, element, attrs, ctrl) {
+			if(typeof scope.options == "undefined") {
+				scope.options = {};
+			}
+			if(typeof scope.options.center == "undefined") {
+				scope.options.center = DEFAULT_OPTIONS.center;
+			} 
+			if(typeof scope.options.zoom == "undefined") {
+				scope.options.zoom = DEFAULT_OPTIONS.zoom;
+			}
 			
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-				
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-							
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}		
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
+			ctrl.getMap().then(function(map) {
+				L.control.zoommin(scope.options).addTo(map);
 			});
-			return deferred.promise;   
 		}
 	};
 }]);
 
-}(angular, google, window));
+})(angular, L);
+
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L) {
+
+'use strict';
+
+angular.module("explorer.crosshair", ['geo.map'])
+
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+	
+	mapService.getMap().then(function(olMap) { 
+		map = olMap; 
+	});
+	
+	return {		
+		add : function(point) {
+            this.move(point);
+		},
+		
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null; 
+			}
+		},
+		
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
+			});
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
+	};
+}]);
+
+})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2154,6 +2045,157 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 })(angular, window);
+(function (angular, google, window) {
+
+'use strict';
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+			
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");							
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+				
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+							
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}		
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode'] 
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;   
+		}
+	};
+}]);
+
+}(angular, google, window));
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular) {
+'use strict';
+
+angular.module("explorer.layer.slider", [])
+
+.directive('explorerLayerSlider', [function() {
+	return {
+		template : '<slider min="0" ng-show="layer" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
+		scope: {
+			layer:"=?"
+		},
+		
+		link: function(scope, element, attrs) {
+			scope.slider = {
+				visibility:true
+			};
+
+			scope.$watch("slider.opacity", function(newValue, oldValue) {
+				if(scope.layer) {
+					scope.layer.setOpacity(newValue);
+				}
+			});
+
+			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
+				if(typeof newValue != "undefined" && typeof oldValue != "undefined") {
+					scope.slider.opacity = newValue;
+				} else if(scope.layer && typeof oldValue == "undefined"){
+					if(typeof scope.slider.opacity == "undefined") {
+						scope.slider.opacity = scope.layer.options.opacity;
+					} else {
+						scope.layer.setOpacity(scope.slider.opacity);						
+					}
+				}
+			});
+		}
+	};	
+}]);
+
+})(angular);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2372,48 +2414,6 @@ angular.module('explorer.layer.inpector', ['explorer.layers'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular) {
-'use strict';
-
-angular.module("explorer.layer.slider", [])
-
-.directive('explorerLayerSlider', [function() {
-	return {
-		template : '<slider min="0" ng-show="layer" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
-		scope: {
-			layer:"=?"
-		},
-		
-		link: function(scope, element, attrs) {
-			scope.slider = {
-				visibility:true
-			};
-
-			scope.$watch("slider.opacity", function(newValue, oldValue) {
-				if(scope.layer) {
-					scope.layer.setOpacity(newValue);
-				}
-			});
-
-			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
-				if(typeof newValue != "undefined" && typeof oldValue != "undefined") {
-					scope.slider.opacity = newValue;
-				} else if(scope.layer && typeof oldValue == "undefined"){
-					if(typeof scope.slider.opacity == "undefined") {
-						scope.slider.opacity = scope.layer.options.opacity;
-					} else {
-						scope.layer.setOpacity(scope.slider.opacity);						
-					}
-				}
-			});
-		}
-	};	
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 
 (function (angular, window, L) {
 
@@ -2567,33 +2567,6 @@ angular.module("explorer.mapstate", [])
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
 
-(function(angular){
-'use strict';
-
-angular.module("geo.measure", [])
-
-.directive("geoMeasure", ['$log', function($log) {
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		link : function(scope, element, attrs, ctrl) {
-			ctrl.getMap().then(function(map) {
-				L.Control.measureControl().addTo(map);
-				// TODO. See if it is useful
-				map.on("draw:drawstop", function(data) {
-					$log.info("Draw stopped");
-					$log.info(data);
-				});
-			});
-		}
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
 (function(angular, L) {
 
 'use strict';
@@ -2690,6 +2663,33 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 
 
 })(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular){
+'use strict';
+
+angular.module("geo.measure", [])
+
+.directive("geoMeasure", ['$log', function($log) {
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		link : function(scope, element, attrs, ctrl) {
+			ctrl.getMap().then(function(map) {
+				L.Control.measureControl().addTo(map);
+				// TODO. See if it is useful
+				map.on("draw:drawstop", function(data) {
+					$log.info("Draw stopped");
+					$log.info(data);
+				});
+			});
+		}
+	};
+}]);
+
+})(angular);
 (function () {
 
     "use strict";
@@ -4012,131 +4012,6 @@ angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
 
 })(angular, L, window);
 
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(L) {
-
-'use strict';
-
-L.Control.Features = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-location-arrow fa-rotate-180',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
-	    this._container.title = "Show features under point";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
-
-        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(e) {
-	        
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	map.fireEvent("featuresactivate", e);
-	        	L.DomUtil.addClass(this, 'active');
-	        } else {
-	        	map.fireEvent("featuresdeactivate", e);
-	        	L.DomUtil.removeClass(this, 'active');
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
-});
-
-L.control.features = function (options) {
-	return new L.Control.Features(options);
-};
-	
-})(L);
-
-L.Control.MousePosition = L.Control.extend({
-  options: {
-    position: 'bottomleft',
-    separator: ' : ',
-    emptyString: 'Unavailable',
-    lngFirst: false,
-    numDigits: 5,
-    elevGetter: undefined,
-    lngFormatter: undefined,
-    latFormatter: undefined,
-    prefix: ""
-  },
-
-  onAdd: function (map) {
-    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
-    L.DomEvent.disableClickPropagation(this._container);
-    map.on('mousemove', this._onMouseMove, this);
-    this._container.innerHTML=this.options.emptyString;
-    return this._container;
-  },
-
-  onRemove: function (map) {
-    map.off('mousemove', this._onMouseMove);
-  },
-
-  _onMouseHover: function () {
-    var info = this._hoverInfo;
-    this._hoverInfo = undefined;
-    this.options.elevGetter(info).then(function(elevStr) {
-       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
-       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
-    }.bind(this));
-  },
-
-  _onMouseMove: function (e) {
-    var w = e.latlng.wrap();
-    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
-    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
-    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    if (this.options.elevGetter) {
-        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
-        this._hoverInfo = {
-            lat: w.lat,
-            lng: w.lng,
-            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
-        };
-    }
-    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
-  }
-
-});
-
-L.Map.mergeOptions({
-    positionControl: false
-});
-
-L.Map.addInitHook(function () {
-    if (this.options.positionControl) {
-        this.positionControl = new L.Control.MousePosition();
-        this.addControl(this.positionControl);
-    }
-});
-
-L.control.mousePosition = function (options) {
-    return new L.Control.MousePosition(options);
-};
-
 /*
  * Google layer using Google Maps API
  */
@@ -4335,6 +4210,131 @@ L.Google.asyncInitialize = function() {
 		}
 	}
 	L.Google.asyncWait = [];
+};
+
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(L) {
+
+'use strict';
+
+L.Control.Features = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-location-arrow fa-rotate-180',
+	    modal: false
+	},
+	
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
+	    this._container.title = "Show features under point";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
+
+        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(e) {
+	        
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	map.fireEvent("featuresactivate", e);
+	        	L.DomUtil.addClass(this, 'active');
+	        } else {
+	        	map.fireEvent("featuresdeactivate", e);
+	        	L.DomUtil.removeClass(this, 'active');
+			}
+	    });
+        return this._container;
+	},
+	
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
+	
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
+
+L.control.features = function (options) {
+	return new L.Control.Features(options);
+};
+	
+})(L);
+
+L.Control.MousePosition = L.Control.extend({
+  options: {
+    position: 'bottomleft',
+    separator: ' : ',
+    emptyString: 'Unavailable',
+    lngFirst: false,
+    numDigits: 5,
+    elevGetter: undefined,
+    lngFormatter: undefined,
+    latFormatter: undefined,
+    prefix: ""
+  },
+
+  onAdd: function (map) {
+    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+    L.DomEvent.disableClickPropagation(this._container);
+    map.on('mousemove', this._onMouseMove, this);
+    this._container.innerHTML=this.options.emptyString;
+    return this._container;
+  },
+
+  onRemove: function (map) {
+    map.off('mousemove', this._onMouseMove);
+  },
+
+  _onMouseHover: function () {
+    var info = this._hoverInfo;
+    this._hoverInfo = undefined;
+    this.options.elevGetter(info).then(function(elevStr) {
+       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
+       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
+    }.bind(this));
+  },
+
+  _onMouseMove: function (e) {
+    var w = e.latlng.wrap();
+    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
+    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
+    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    if (this.options.elevGetter) {
+        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
+        this._hoverInfo = {
+            lat: w.lat,
+            lng: w.lng,
+            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
+        };
+    }
+    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
+  }
+
+});
+
+L.Map.mergeOptions({
+    positionControl: false
+});
+
+L.Map.addInitHook(function () {
+    if (this.options.positionControl) {
+        this.positionControl = new L.Control.MousePosition();
+        this.addControl(this.positionControl);
+    }
+});
+
+L.control.mousePosition = function (options) {
+    return new L.Control.MousePosition(options);
 };
 
 /*!
@@ -4824,11 +4824,26 @@ angular.module("geo.map", [])
 			Clazz = L[data.type];
 		}
 		if(data.parameters && data.parameters.length > 0) {
-			return new Clazz(data.parameters[0], data.parameters[1], data.parameters[2], data.parameters[3], data.parameters[4]);
+         var options = data.parameters[1];
+         if (options) {
+            options = transformOptions(options);
+         }
+			return new Clazz(data.parameters[0], options, data.parameters[2], data.parameters[3], data.parameters[4]);
 		}
 		return new Clazz();
 	}
 
+   function transformOptions(options) {
+      if (options.bounds && angular.isArray(options.bounds)) {
+         var bounds = options.bounds;
+         var ll = bounds[0];
+         var ur = bounds[1];
+         if (angular.isArray(ll) && angular.isArray(ur)) {
+            options.bounds = L.latLngBounds(bounds);
+         }
+      }
+      return options;
+   }
 }]);
 
 })(angular, L, window);
