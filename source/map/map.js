@@ -114,7 +114,8 @@ angular.module("geo.map", [])
 		map = service.maps[config.name] = new L.Map(config.element, {
             center: config.options.center,
             zoom: config.options.zoom,
-            zoomControl: !config.options.noZoomControl
+            zoomControl: !config.options.noZoomControl,
+            minZoom: config.options.minZoom
         });
 
         if (config.gridLayer) {
@@ -125,7 +126,7 @@ angular.module("geo.map", [])
 		if(config.layers) {
 			config.layers.forEach(function(layer) {
 				var group;
-				if(layer.type == "LayerGroup") {
+				if(layer.type === "LayerGroup") {
 					if(layer.layers) {
 						groups[layer.name] = group = L.layerGroup([]);
 						layer.layers.forEach(function(child) {
