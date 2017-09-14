@@ -12,8 +12,8 @@ angular.module("geo.draw", ['geo.map'])
 		rectangleEvent : "geo.draw.rectangle.created",
 		lineEvent : "geo.draw.line.created"
 	};
-	
-	
+
+
 	return {
 		restrict : "AE",
 		scope : {
@@ -22,14 +22,14 @@ angular.module("geo.draw", ['geo.map'])
 			lineEvent : "@"
 		},
 		link : function(scope, element, attrs, ctrl) {
-			
+
 			angular.forEach(DEFAULTS, function(value, key) {
 				if(!scope[key]) {
 					scope[key] = value;
 				}
 			});
-			
-				
+
+
 			drawService.createControl(scope);
 		}
 	};
@@ -39,28 +39,28 @@ angular.module("geo.draw", ['geo.map'])
 	var drawControl,
 		drawer,
 		featureGroup,
-		rectangleDeferred;	
-	
+		rectangleDeferred;
+
 	return {
 		createControl : function(parameters) {
 			if(drawControl) {
 				$q.when(drawControl);
 			}
-			
+
 			return mapService.getMap().then(function(map) {
 				var drawnItems = new L.FeatureGroup(),
-				    options = { 
+				    options = {
 				       edit: {
 				          featureGroup: drawnItems
 				       }
 				    };
-	
+
 				if(parameters.data) {
 					angular.extend(options, parameters.data);
-				}			
-				
+				}
+
 				featureGroup = parameters.drawnItems = drawnItems;
-				
+
 				map.addLayer(drawnItems);
 				// Initialise the draw control and pass it the FeatureGroup of editable layers
 				drawControl = new L.Control.Draw(options);
@@ -76,14 +76,15 @@ angular.module("geo.draw", ['geo.map'])
 							var data = {bounds:event.layer.getBounds()};
 							rectangleDeferred.resolve(data);
 							rectangleDeferred = null;
+							$rootScope.$broadcast(parameters.rectangleEvent, data);
 						}
 					})[event.layerType]();
 				});
-				
+
 				return drawControl;
 			});
 		},
-		
+
 		cancelDrawRectangle : function() {
 			if(rectangleDeferred) {
 				rectangleDeferred.reject();
@@ -93,7 +94,7 @@ angular.module("geo.draw", ['geo.map'])
 				}
 			}
 		},
-		
+
 		drawRectangle : function() {
 			this.cancelDrawRectangle();
 			rectangleDeferred = $q.defer();
@@ -104,7 +105,7 @@ angular.module("geo.draw", ['geo.map'])
 					drawer = new L.Draw.Rectangle(map, drawControl.options.polyline);
 					drawer.enable();
 				});
-			}			
+			}
 			return rectangleDeferred.promise;
 		}
 	};
