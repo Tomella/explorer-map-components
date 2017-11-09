@@ -115,6 +115,7 @@ angular.module("geo.map", [])
             center: config.options.center,
             zoom: config.options.zoom,
             zoomControl: !config.options.noZoomControl,
+            maxZoom: config.options.maxZoom,
             minZoom: config.options.minZoom
         });
 
