@@ -1213,205 +1213,6 @@ angular.module("geo.draw", ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L) {
-
-'use strict';
-
-angular.module("explorer.crosshair", ['geo.map'])
-
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
-	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
-	});
-	
-	return {		
-		add : function(point) {
-            this.move(point);
-		},
-		
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null; 
-			}
-		},
-		
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
-
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
-}]);
-
-})(angular, L);
-/**
- * Created by danielwild on 26/08/2015.
- * Partially ported to leaflet by jammirali on 1/06/2016.
- */
-(function(angular, L) {
-
-'use strict';
-
-angular.module('geo.drawhelper', ['geo.map'])
-
-/**
- * A collection of helper functions for drawing shapes etc.
- *
- * PolyLine (renders with Primitive, for extruded 'fence')
- * Polygon
- * Extent
- *
- */
-
-
-.factory('drawHelperService', ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
-
-    var service = {}, drawOptions, polygonDrawer, polylineDrawer, rectangleDrawer;
-
-    service.getDrawHelper = function(){
-
-        if (polygonDrawer) return $q.when(service);
-
-        var deferred = $q.defer();
-        mapService.getMap().then(function(map){
-            var options = {
-               color: '#000099',
-               opacity: 0.4
-            };
-            polygonDrawer = new L.Draw.Polygon(map, options);
-            polylineDrawer = new L.Draw.Polyline(map, options);
-            rectangleDrawer = new L.Draw.Rectangle(map, options);
-            function callCallback(event) {
-                if (drawOptions.callback) {
-                    var layer = drawOptions._layer;
-                    if (!layer)
-                        drawOptions.callback(null);
-                    else ({
-                        polygon : function() {
-                            drawOptions.callback(layer.getLatLngs());
-                        },
-                        polyline : function() {
-                            drawOptions.callback({length:layer.getLength(), positions:layer.getLatLngs()});
-                        },
-                        rectangle : function() {
-                            drawOptions.callback(layer.getBounds());
-                        }
-                    })[drawOptions._layerType]();
-                }
-            }
-            function doneDrawing(event) {
-                callCallback(event);
-                broadcastDrawState(false);
-            }
-            map.on("draw:created", function(event) {
-                drawOptions._layer = event.layer;
-                if (!drawOptions.editable) return doneDrawing(event);
-                callCallback(event);
-                map.addLayer(drawOptions._layer);
-                event.layer.options.editing = options;
-                event.layer.editing.enable();
-            });
-            map.on("draw:deleted", doneDrawing);
-            map.on("draw:edited", doneDrawing);
-            map.on("draw:editresized", callCallback);
-            map.on("draw:editvertex", callCallback);
-            deferred.resolve(service);
-        });
-        return deferred.promise;
-    };
-
-    /**
-     *
-     * Wrapper for DrawHelper.startDrawingPolyline
-     *
-     * @param options {
- *      callback: Function,
- *      editable: Boolean,
- *      width: Number, // ignored
- *      geodesic: Boolean // ignored
- * }
-     *
-     */
-    service.drawPolyline = function(options){
-        broadcastDrawState(true);
-        drawOptions = options;
-        drawOptions._layerType = "polyline";
-        polylineDrawer.enable();
-    };
-
-    /**
-     *
-     * Wrapper for DrawHelper.startDrawingPolygon
-     *
-     * @param options {
-*      callback: Function,
-*       editable: Boolean
-* }
-     *
-     */
-    service.drawPolygon = function(options){
-        broadcastDrawState(true);
-        drawOptions = options;
-        drawOptions._layerType = "polygon";
-        polygonDrawer.enable();
-    };
-
-    /**
-     *
-     * Wrapper for DrawHelper.startDrawingExtent
-     *
-     * @param options {
-*      callback: Function,
-*      editable: Boolean
-* }
-     *
-     */
-    service.drawExtent = function(options){
-        broadcastDrawState(true);
-        drawOptions = options;
-        drawOptions._layerType = "rectangle";
-        rectangleDrawer.enable();
-    };
-
-    service.stopDrawing = function(){
-        if (drawOptions && drawOptions._layer) {
-            var layer = drawOptions._layer;
-            mapService.getMap().then(function(map) {
-                map.removeLayer(layer);
-            });
-        }
-        drawOptions = undefined;
-        polygonDrawer.disable();
-        polylineDrawer.disable();
-        rectangleDrawer.disable();
-        broadcastDrawState(false);
-    };
-
-    function broadcastDrawState(active){
-        $rootScope.$broadcast('drawhelper.active', active);
-    }
-
-    return service;
-
-}]);
-
-})(angular, L);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 /**
  * This version relies on 0.0.4+ of explorer-path-server as it uses the URL for intersection on the artesian basin plus the actual KML
  */
@@ -1775,6 +1576,205 @@ angular.module("geo.elevation", [
 
 })(angular, Exp, L);
 
+/**
+ * Created by danielwild on 26/08/2015.
+ * Partially ported to leaflet by jammirali on 1/06/2016.
+ */
+(function(angular, L) {
+
+'use strict';
+
+angular.module('geo.drawhelper', ['geo.map'])
+
+/**
+ * A collection of helper functions for drawing shapes etc.
+ *
+ * PolyLine (renders with Primitive, for extruded 'fence')
+ * Polygon
+ * Extent
+ *
+ */
+
+
+.factory('drawHelperService', ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
+
+    var service = {}, drawOptions, polygonDrawer, polylineDrawer, rectangleDrawer;
+
+    service.getDrawHelper = function(){
+
+        if (polygonDrawer) return $q.when(service);
+
+        var deferred = $q.defer();
+        mapService.getMap().then(function(map){
+            var options = {
+               color: '#000099',
+               opacity: 0.4
+            };
+            polygonDrawer = new L.Draw.Polygon(map, options);
+            polylineDrawer = new L.Draw.Polyline(map, options);
+            rectangleDrawer = new L.Draw.Rectangle(map, options);
+            function callCallback(event) {
+                if (drawOptions.callback) {
+                    var layer = drawOptions._layer;
+                    if (!layer)
+                        drawOptions.callback(null);
+                    else ({
+                        polygon : function() {
+                            drawOptions.callback(layer.getLatLngs());
+                        },
+                        polyline : function() {
+                            drawOptions.callback({length:layer.getLength(), positions:layer.getLatLngs()});
+                        },
+                        rectangle : function() {
+                            drawOptions.callback(layer.getBounds());
+                        }
+                    })[drawOptions._layerType]();
+                }
+            }
+            function doneDrawing(event) {
+                callCallback(event);
+                broadcastDrawState(false);
+            }
+            map.on("draw:created", function(event) {
+                drawOptions._layer = event.layer;
+                if (!drawOptions.editable) return doneDrawing(event);
+                callCallback(event);
+                map.addLayer(drawOptions._layer);
+                event.layer.options.editing = options;
+                event.layer.editing.enable();
+            });
+            map.on("draw:deleted", doneDrawing);
+            map.on("draw:edited", doneDrawing);
+            map.on("draw:editresized", callCallback);
+            map.on("draw:editvertex", callCallback);
+            deferred.resolve(service);
+        });
+        return deferred.promise;
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingPolyline
+     *
+     * @param options {
+ *      callback: Function,
+ *      editable: Boolean,
+ *      width: Number, // ignored
+ *      geodesic: Boolean // ignored
+ * }
+     *
+     */
+    service.drawPolyline = function(options){
+        broadcastDrawState(true);
+        drawOptions = options;
+        drawOptions._layerType = "polyline";
+        polylineDrawer.enable();
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingPolygon
+     *
+     * @param options {
+*      callback: Function,
+*       editable: Boolean
+* }
+     *
+     */
+    service.drawPolygon = function(options){
+        broadcastDrawState(true);
+        drawOptions = options;
+        drawOptions._layerType = "polygon";
+        polygonDrawer.enable();
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingExtent
+     *
+     * @param options {
+*      callback: Function,
+*      editable: Boolean
+* }
+     *
+     */
+    service.drawExtent = function(options){
+        broadcastDrawState(true);
+        drawOptions = options;
+        drawOptions._layerType = "rectangle";
+        rectangleDrawer.enable();
+    };
+
+    service.stopDrawing = function(){
+        if (drawOptions && drawOptions._layer) {
+            var layer = drawOptions._layer;
+            mapService.getMap().then(function(map) {
+                map.removeLayer(layer);
+            });
+        }
+        drawOptions = undefined;
+        polygonDrawer.disable();
+        polylineDrawer.disable();
+        rectangleDrawer.disable();
+        broadcastDrawState(false);
+    };
+
+    function broadcastDrawState(active){
+        $rootScope.$broadcast('drawhelper.active', active);
+    }
+
+    return service;
+
+}]);
+
+})(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L) {
+
+'use strict';
+
+angular.module("explorer.crosshair", ['geo.map'])
+
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+	
+	mapService.getMap().then(function(olMap) { 
+		map = olMap; 
+	});
+	
+	return {		
+		add : function(point) {
+            this.move(point);
+		},
+		
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null; 
+			}
+		},
+		
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
+			});
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
+	};
+}]);
+
+})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2158,6 +2158,48 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
+(function(angular) {
+'use strict';
+
+angular.module("explorer.layer.slider", [])
+
+.directive('explorerLayerSlider', [function() {
+	return {
+		template : '<slider min="0" ng-show="layer" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
+		scope: {
+			layer:"=?"
+		},
+		
+		link: function(scope, element, attrs) {
+			scope.slider = {
+				visibility:true
+			};
+
+			scope.$watch("slider.opacity", function(newValue, oldValue) {
+				if(scope.layer) {
+					scope.layer.setOpacity(newValue);
+				}
+			});
+
+			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
+				if(typeof newValue != "undefined" && typeof oldValue != "undefined") {
+					scope.slider.opacity = newValue;
+				} else if(scope.layer && typeof oldValue == "undefined"){
+					if(typeof scope.slider.opacity == "undefined") {
+						scope.slider.opacity = scope.layer.options.opacity;
+					} else {
+						scope.layer.setOpacity(scope.slider.opacity);						
+					}
+				}
+			});
+		}
+	};	
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
 
 (function(angular, L) {
 
@@ -2367,48 +2409,6 @@ angular.module('explorer.layer.inpector', ['explorer.layers'])
 		}],		
 		templateUrl : "map/layerinspector/layerInspector.html"
 	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-(function(angular) {
-'use strict';
-
-angular.module("explorer.layer.slider", [])
-
-.directive('explorerLayerSlider', [function() {
-	return {
-		template : '<slider min="0" ng-show="layer" max="1" step="0.1" updateevent="slideStop" ng-model="slider.opacity" ng-disabled="!slider.visibility" ui-tooltip="hide"></slider>',
-		scope: {
-			layer:"=?"
-		},
-		
-		link: function(scope, element, attrs) {
-			scope.slider = {
-				visibility:true
-			};
-
-			scope.$watch("slider.opacity", function(newValue, oldValue) {
-				if(scope.layer) {
-					scope.layer.setOpacity(newValue);
-				}
-			});
-
-			scope.$watch("layer.options.opacity", function(newValue, oldValue) {
-				if(typeof newValue != "undefined" && typeof oldValue != "undefined") {
-					scope.slider.opacity = newValue;
-				} else if(scope.layer && typeof oldValue == "undefined"){
-					if(typeof scope.slider.opacity == "undefined") {
-						scope.slider.opacity = scope.layer.options.opacity;
-					} else {
-						scope.layer.setOpacity(scope.slider.opacity);						
-					}
-				}
-			});
-		}
-	};	
 }]);
 
 })(angular);
@@ -2691,6 +2691,499 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
 
 
 })(angular, L);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+(function(angular, L, window) {
+'use strict';
+
+angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
+
+.directive("expPoint", ['pointService', function(pointService) {
+	return {
+		scope : {
+			data : "=point"
+		},		
+		controller : ['$scope', function($scope) {
+			$scope.$watch("data", function(newData, oldData) {
+				if(newData || oldData) {
+					pointService.showPoint($scope.data);
+				}
+			});
+		}]
+	};
+}])
+
+.directive("expClickMapPoint", ['pointService', function(pointService) {
+	return {
+        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
+		restrict:'AE',
+		scope : {
+		},		
+		link : function(scope, element) {
+			pointService.addMapListener(function(latlon) {
+				pointService.showPoint(latlon);
+			}, this);
+		}
+	};
+}])
+
+.directive("expClickModalMapPoint", ['pointService', '$rootScope', function (pointService, $rootScope) {
+    return {
+        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
+        restrict: 'A',
+        link: function (scope) {
+            var enabled = false, drawing = false;
+            $rootScope.$on('drawhelper.active', function(event, drawingActive) {
+                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
+                drawing = drawingActive;
+            });
+            pointService.addMapListener(function(latlon) {
+                pointService.showPoint(enabled && !drawing && latlon);
+            }, this);
+            scope.$watch("unlinked", function(unlinked) {
+                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
+                enabled = unlinked.featureDetails;
+            }, true);
+        }
+    };
+}])
+
+.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
+	var defaultOptions = {
+			actions : [],
+			visible : true,
+			modal : false,
+			minWidth : 240,
+			title : "Features within approx 2km",
+			position : {top:140, left:40}
+		};
+	
+	return {
+		restrict:"AE",
+		templateUrl : "map/point/point.html",
+		scope :true,
+		controller : ['$scope', function($scope) {
+			if($scope.options) {
+				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
+			} else {
+				$scope.windowOptions = angular.extend({}, defaultOptions);
+			}
+		}],
+		link : function(scope, element) {
+			// This things is a one shot wonder so we listen for an event.
+			$rootScope.$on("map.point.changed", function(event, point) {
+				scope.point = point;
+				pointService.removeLayer();
+                scope.changePoint(point);
+				if(point) {
+					pointService.getMetaData().then(function(response) {
+						scope.metadata = response.data;
+					});
+				}
+			});
+			
+			scope.createTitle = function() {
+				var oneItem = !this.greaterThanOneItem(),
+					layerName = this.feature.layerName,
+					metadata = this.metadata[layerName],
+					preferredLabel = metadata.preferredLabel,
+					value = this.feature.attributes[preferredLabel];
+				
+				if(!oneItem && value && value != "Null") {
+					return value;
+				} else {
+					return metadata.label;
+				}				
+			};
+			
+			scope.changePoint = function(newValue) {
+				pointService.moveMarker(newValue);
+				if(newValue) {
+					pointService.getInfo(newValue).then(function(data) {
+						handleResponse(data);
+					});
+				}
+				pointService.removeLayer();
+			};
+			
+			scope.clearPoint = function() {
+				scope.point = false;
+				pointService.removeLayer();
+				pointService.removeMarker();
+			};
+			
+			scope.toggleShow = function() {
+				this.feature.displayed = !this.feature.displayed;
+				if(this.feature.displayed) {
+					this.feature.feature = pointService.showFeature(this.feature);
+				} else {
+					pointService.hideFeature(this.feature.feature);
+					this.feature.layer = null;
+				}
+			};			
+			
+			scope.oneShowing = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				return oneShown;
+			};
+			
+			scope.greaterThanOneItem = function() {
+				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
+			};
+			
+			scope.groupShow = function() {
+				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
+					oneShown = false;
+				
+				group.forEach(function(feature) {
+					oneShown |= feature.displayed;
+				});
+				
+				group.forEach(function(feature) {
+					if(oneShown) {
+						feature.feature = pointService.hideFeature(feature.feature);
+						feature.displayed = false;
+					} else {
+						feature.feature = pointService.showFeature(feature);
+						feature.displayed = true;
+					}
+				});
+			};			
+			
+			scope.allHidden = function() {
+				var allHidden = true;
+				if(this.featuresInfo && this.featuresInfo.results) {
+					this.featuresInfo.results.forEach(function(feature) {
+						allHidden &= !feature.displayed;
+					});
+				}
+				return allHidden;
+			};
+			
+			scope.toggleAll = function() {
+				var allHidden = scope.allHidden();
+				this.featuresInfo.results.forEach(function(feature) {
+					if(allHidden) {
+						if(!feature.displayed) {
+							feature.displayed = true;
+							feature.feature = pointService.showFeature(feature);
+						}
+					} else {
+						if(feature.displayed) {
+							feature.displayed = false;
+							feature.feature = pointService.hideFeature(feature.feature);
+						}
+					}
+				});
+			};
+			
+			scope.elevationPath = function(label) {
+				if(!this.feature.feature) {
+					this.feature.feature = pointService.createFeature(this.feature);
+				}
+				pointService.triggerElevationPlot(this.feature.feature[0], label);
+			};
+			
+			function handleResponse(data) {
+				scope.featuresInfo = data;
+				pointService.createLayer();				
+			}
+		}
+	};
+}])
+
+.factory("pointService", ['httpData', '$q', 'configService', 'mapService', '$rootScope', function(httpData, $q, configService, mapService, $rootScope){
+	var featuresUnderPointUrl = "service/path/featureInfo",
+		layer = null,
+		control = null,
+		esriGeometryMapping = {
+			"esriGeometryPoint"   : {
+				createFeatures : function(geometry) {
+					var point = [geometry.y, geometry.x];
+					return [L.circleMarker(point)];
+				},
+				type : "x,y"
+			},
+			"esriGeometryPolyline": {
+				createFeatures : function(geometry) {
+					var features = [];
+					geometry.paths.forEach(function(path) {
+						var points = [];
+						path.forEach(function(point) {
+							points.push([point[1], point[0]]);
+						});						
+						features.push(L.polyline(points));
+					});
+					return features;
+				},
+				type: "paths"
+			},
+			"esriGeometryPolygon" : {
+				createFeatures : function(geometry) {
+					var polygonGeometry,
+						rings = [];
+					
+					geometry.rings.forEach(function(ring) {
+						var linearRing, polygon, points = [];
+						ring.forEach(function(pointArr) {
+							points.push([pointArr[1], pointArr[0]]);
+						});
+					    rings.push(points);
+					});
+					polygonGeometry = L.multiPolygon(rings);
+					return [polygonGeometry];
+				},
+				type: "rings"
+			}
+		},
+		metaDataUrl = httpData.baseUrlForPkg('ga-explorer-map') + 'resources/point/pointMetadata.json',
+		marker = null,
+		clickControl = null,
+		clickListeners = [];
+
+	return {
+		triggerElevationPlot : function(geometry, label) {
+			var distance = geometry.getLength();
+			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
+		},
+		
+		addMapListener : function(callback, bound) {
+			var alreadyBound = false;
+			clickListeners.forEach(function(obj) {
+				if(obj.callback == callback && obj.bound == bound) {
+					alreadyBound = true;
+				}
+			});
+			if(!alreadyBound) {
+				clickListeners.push({callback : callback, bound : bound});
+			}
+			
+			if(!clickControl) {
+				clickControl = true;
+				mapService.getMap().then(function(map) {
+		            map.on("click", function(e) {
+		               clickListeners.forEach(function(listener) {
+		            	   var callback = listener.callback,
+		            	   		point = {
+		            			   x: e.latlng.lng,
+		            			   y: e.latlng.lat
+		            	   		};
+		            	   
+		            	   point.lat = point.y;
+		            	   point.lng = point.x;
+		                   if(listener.bound) {
+		                	   callback.bind(listener.bound);
+		                   }
+		                   callback(point);
+		                }); 
+		            });
+				});
+			}
+		},
+		
+		getMetaData : function() {
+			return httpData.get(metaDataUrl, {cache:true});
+		},
+		
+		moveMarker : function(point) {
+			mapService.getMap().then(function(map) {
+				var size, offset, icon;
+	
+				if(marker) {
+					map.removeLayer(marker);
+				}
+				marker = point? L.marker(point).addTo(map): null;
+			});
+			
+		},
+		
+		removeMarker : function() {
+			if(marker) {
+				mapService.getMap().then(function(map) {
+					map.removeLayer(marker);
+					marker = null;					
+				});
+			}			
+		},
+		
+		showPoint : function(point) {
+			$rootScope.$broadcast("map.point.changed", point);
+		},
+		
+		removePoint : function() {
+			$rootScope.$broadcast("map.point.changed", null);
+		},
+		
+		getBehaviour : function(geometryType) {
+			
+		},
+		
+		getInfo : function(point) {
+			return mapService.getMap().then(function(map) {
+				var bounds = map._container.getBoundingClientRect(),
+					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
+					extent = map.getBounds();
+
+				return configService.getConfig("clientSessionId").then(function(id) {			
+					return httpData.post(featuresUnderPointUrl, {
+							clientSessionId : id,
+							x:point.x, 
+							y:point.y, 
+							width:bounds.width / ratio, 
+							height:bounds.height / ratio,
+							extent : {
+								left : extent.left,
+								right : extent.right,
+								top: extent.top,
+								bottom: extent.bottom
+					}}).then(function(response) {
+						return response.data;
+					});
+				});
+			});
+		},
+		
+		overFeatures : function(features) {
+			var item;
+			if(!features) {
+				return;
+			}
+			if(angular.isArray(features)) {
+				item = features[0];
+			} else {
+				item = features;
+			}
+			if(item) {
+				item.bringToFront().setStyle({color:"red"});
+			}
+		},
+		
+		outFeatures : function(features) {
+			if(!features) {
+				return;
+			}
+			features.forEach(function(feature) {
+				feature.setStyle({color : '#03f'});
+			}); 			
+		},
+		
+		createLayer : function() {
+			return mapService.getMap().then(function(map) {
+				layer = L.layerGroup();
+				map.addLayer(layer);
+				return layer;
+			});	
+		},
+		
+		removeLayer : function() {		
+			return mapService.getMap().then(function(map) {
+				if(layer) {
+					map.removeLayer(layer);
+				}
+                /* jshint -W093 */
+				return layer = null;
+			});	
+		},
+		
+		createFeature : function(data) {
+			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
+		},
+		
+		showFeature : function(data) {
+			var features = this.createFeature(data);
+			features.forEach(function(feature) {
+				layer.addLayer(feature);				
+			});
+			return features;
+		},
+		
+		hideFeature : function(features) {
+			if(features) {
+				features.forEach(function(feature) {
+					layer.removeLayer(feature);					
+				});
+			}
+		}
+	};
+}])
+
+.filter("dashNull", [function() {
+	return function(value) {
+		if(!value || "Null" == value) {
+			return "-";
+		}
+		return value;
+	};
+}])
+
+.filter("featureGroups", [function() {
+	return function(items) {
+		var groups = [],
+			set = {};
+		if(!items) {
+			return groups;
+		}
+		items.forEach(function(item) {
+			var layerName = item.layerName;
+			if(!set[layerName]) {
+				set[layerName] = true;
+				groups.push(layerName);
+			}
+		});
+		return groups;
+	};
+}])
+
+.filter("filterGroupsByLayername", [function() {
+	return function(items, layerName) {
+		var group = [];
+		if(!items) {
+			return group;
+		}
+		items.forEach(function(item) {
+			if(layerName == item.layerName) {
+				group.push(item);
+			}
+		});
+		return group;
+	};
+}])
+
+
+.controller("OverFeatureCtrl", ['$filter', 'pointService', function($filter, pointService) {
+	this.click = function() {
+	};
+
+	this.mouseenter = function(feature) {
+		pointService.overFeatures(feature.feature);
+	};
+	
+	this.mouseleave = function(feature) {
+		pointService.outFeatures(feature.feature);
+	};
+	
+	this.groupEnter = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.overFeatures(feature.feature);
+		});
+	};
+	
+	this.groupLeave = function(results, item) {
+		var group = $filter("filterGroupsByLayername")(results, item);
+		group.forEach(function(feature){
+			pointService.outFeatures(feature.feature);
+		});
+	};
+}]);
+
+})(angular, L, window);
+
 (function () {
 
     "use strict";
@@ -3236,7 +3729,7 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
      * @constant DATA_ATTRIBUTE
      * @type {String|Symbol}
      */
-    var DATA_ATTRIBUTE = typeof Symbol === 'undefined' ? '_pather' : Symbol["for"]('pather');
+    var DATA_ATTRIBUTE = '_pather'; // typeof Symbol === 'undefined' ? '_pather' : Symbol["for"]('pather');
 
     /**
      * @module Pather
@@ -3516,502 +4009,67 @@ angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'e
             }.bind(this));
 
         }
-        
+
     };
 
 })();
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L, window) {
+
+(function(L) {
+
 'use strict';
 
-angular.module("explorer.point", ['geo.map', 'explorer.flasher'])
-
-.directive("expPoint", ['pointService', function(pointService) {
-	return {
-		scope : {
-			data : "=point"
-		},		
-		controller : ['$scope', function($scope) {
-			$scope.$watch("data", function(newData, oldData) {
-				if(newData || oldData) {
-					pointService.showPoint($scope.data);
-				}
-			});
-		}]
-	};
-}])
-
-.directive("expClickMapPoint", ['pointService', function(pointService) {
-	return {
-        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
-		restrict:'AE',
-		scope : {
-		},		
-		link : function(scope, element) {
-			pointService.addMapListener(function(latlon) {
-				pointService.showPoint(latlon);
-			}, this);
-		}
-	};
-}])
-
-.directive("expClickModalMapPoint", ['pointService', '$rootScope', function (pointService, $rootScope) {
-    return {
-        template: '<div style="position:relative;overflow:hidden"><i style="position:relative;display:inline-block;right:-3px;top:-3px" class="fa fa-location-arrow fa-rotate-180"></i><i style="position:absolute;display:inline-block;right:4px;top:7px" class="fa fa-location-arrow fa-rotate-180"></i></div>',
-        restrict: 'A',
-        link: function (scope) {
-            var enabled = false, drawing = false;
-            $rootScope.$on('drawhelper.active', function(event, drawingActive) {
-                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
-                drawing = drawingActive;
-            });
-            pointService.addMapListener(function(latlon) {
-                pointService.showPoint(enabled && !drawing && latlon);
-            }, this);
-            scope.$watch("unlinked", function(unlinked) {
-                if (enabled && !drawing) pointService.showPoint(null); // remove our visuals
-                enabled = unlinked.featureDetails;
-            }, true);
-        }
-    };
-}])
-
-.directive("expPointInspector", ['pointService', 'flashService', '$rootScope', '$filter', function(pointService, flashService, $rootScope, $filter) {
-	var defaultOptions = {
-			actions : [],
-			visible : true,
-			modal : false,
-			minWidth : 240,
-			title : "Features within approx 2km",
-			position : {top:140, left:40}
-		};
+L.Control.Features = L.Control.extend({
+	_active: false,
+	_map: null,
+	includes: L.Mixin.Events,
+	options: {
+	    position: 'topleft',
+	    className: 'fa fa-location-arrow fa-rotate-180',
+	    modal: false
+	},
 	
-	return {
-		restrict:"AE",
-		templateUrl : "map/point/point.html",
-		scope :true,
-		controller : ['$scope', function($scope) {
-			if($scope.options) {
-				$scope.windowOptions = angular.extend({}, defaultOptions, scope.options);
-			} else {
-				$scope.windowOptions = angular.extend({}, defaultOptions);
-			}
-		}],
-		link : function(scope, element) {
-			// This things is a one shot wonder so we listen for an event.
-			$rootScope.$on("map.point.changed", function(event, point) {
-				scope.point = point;
-				pointService.removeLayer();
-                scope.changePoint(point);
-				if(point) {
-					pointService.getMetaData().then(function(response) {
-						scope.metadata = response.data;
-					});
-				}
-			});
-			
-			scope.createTitle = function() {
-				var oneItem = !this.greaterThanOneItem(),
-					layerName = this.feature.layerName,
-					metadata = this.metadata[layerName],
-					preferredLabel = metadata.preferredLabel,
-					value = this.feature.attributes[preferredLabel];
-				
-				if(!oneItem && value && value != "Null") {
-					return value;
-				} else {
-					return metadata.label;
-				}				
-			};
-			
-			scope.changePoint = function(newValue) {
-				pointService.moveMarker(newValue);
-				if(newValue) {
-					pointService.getInfo(newValue).then(function(data) {
-						handleResponse(data);
-					});
-				}
-				pointService.removeLayer();
-			};
-			
-			scope.clearPoint = function() {
-				scope.point = false;
-				pointService.removeLayer();
-				pointService.removeMarker();
-			};
-			
-			scope.toggleShow = function() {
-				this.feature.displayed = !this.feature.displayed;
-				if(this.feature.displayed) {
-					this.feature.feature = pointService.showFeature(this.feature);
-				} else {
-					pointService.hideFeature(this.feature.feature);
-					this.feature.layer = null;
-				}
-			};			
-			
-			scope.oneShowing = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				return oneShown;
-			};
-			
-			scope.greaterThanOneItem = function() {
-				return $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item).length > 1;
-			};
-			
-			scope.groupShow = function() {
-				var group = $filter("filterGroupsByLayername")(scope.featuresInfo.results, this.item),
-					oneShown = false;
-				
-				group.forEach(function(feature) {
-					oneShown |= feature.displayed;
-				});
-				
-				group.forEach(function(feature) {
-					if(oneShown) {
-						feature.feature = pointService.hideFeature(feature.feature);
-						feature.displayed = false;
-					} else {
-						feature.feature = pointService.showFeature(feature);
-						feature.displayed = true;
-					}
-				});
-			};			
-			
-			scope.allHidden = function() {
-				var allHidden = true;
-				if(this.featuresInfo && this.featuresInfo.results) {
-					this.featuresInfo.results.forEach(function(feature) {
-						allHidden &= !feature.displayed;
-					});
-				}
-				return allHidden;
-			};
-			
-			scope.toggleAll = function() {
-				var allHidden = scope.allHidden();
-				this.featuresInfo.results.forEach(function(feature) {
-					if(allHidden) {
-						if(!feature.displayed) {
-							feature.displayed = true;
-							feature.feature = pointService.showFeature(feature);
-						}
-					} else {
-						if(feature.displayed) {
-							feature.displayed = false;
-							feature.feature = pointService.hideFeature(feature.feature);
-						}
-					}
-				});
-			};
-			
-			scope.elevationPath = function(label) {
-				if(!this.feature.feature) {
-					this.feature.feature = pointService.createFeature(this.feature);
-				}
-				pointService.triggerElevationPlot(this.feature.feature[0], label);
-			};
-			
-			function handleResponse(data) {
-				scope.featuresInfo = data;
-				pointService.createLayer();				
-			}
-		}
-	};
-}])
+	onAdd: function (map) {
+	    this._map = map;
+	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
+	    this._container.title = "Show features under point";
+	    var link = L.DomUtil.create('a', this.options.className, this._container);
+        link.href = "#";
 
-.factory("pointService", ['httpData', '$q', 'configService', 'mapService', '$rootScope', function(httpData, $q, configService, mapService, $rootScope){
-	var featuresUnderPointUrl = "service/path/featureInfo",
-		layer = null,
-		control = null,
-		esriGeometryMapping = {
-			"esriGeometryPoint"   : {
-				createFeatures : function(geometry) {
-					var point = [geometry.y, geometry.x];
-					return [L.circleMarker(point)];
-				},
-				type : "x,y"
-			},
-			"esriGeometryPolyline": {
-				createFeatures : function(geometry) {
-					var features = [];
-					geometry.paths.forEach(function(path) {
-						var points = [];
-						path.forEach(function(point) {
-							points.push([point[1], point[0]]);
-						});						
-						features.push(L.polyline(points));
-					});
-					return features;
-				},
-				type: "paths"
-			},
-			"esriGeometryPolygon" : {
-				createFeatures : function(geometry) {
-					var polygonGeometry,
-						rings = [];
-					
-					geometry.rings.forEach(function(ring) {
-						var linearRing, polygon, points = [];
-						ring.forEach(function(pointArr) {
-							points.push([pointArr[1], pointArr[0]]);
-						});
-					    rings.push(points);
-					});
-					polygonGeometry = L.multiPolygon(rings);
-					return [polygonGeometry];
-				},
-				type: "rings"
+        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
+	            .on(this._container, 'click', L.DomEvent.stop)
+	            .on(this._container, 'click', function(e) {
+	        
+	        this._active = !this._active;
+	       
+	        if(this._active) {
+	        	map.fireEvent("featuresactivate", e);
+	        	L.DomUtil.addClass(this, 'active');
+	        } else {
+	        	map.fireEvent("featuresdeactivate", e);
+	        	L.DomUtil.removeClass(this, 'active');
 			}
-		},
-		metaDataUrl = httpData.baseUrlForPkg('ga-explorer-map') + 'resources/point/pointMetadata.json',
-		marker = null,
-		clickControl = null,
-		clickListeners = [];
-
-	return {
-		triggerElevationPlot : function(geometry, label) {
-			var distance = geometry.getLength();
-			$rootScope.$broadcast("elevation.plot.data", {length:distance, geometry:geometry.getLatLngs(), heading:label});
-		},
-		
-		addMapListener : function(callback, bound) {
-			var alreadyBound = false;
-			clickListeners.forEach(function(obj) {
-				if(obj.callback == callback && obj.bound == bound) {
-					alreadyBound = true;
-				}
-			});
-			if(!alreadyBound) {
-				clickListeners.push({callback : callback, bound : bound});
-			}
-			
-			if(!clickControl) {
-				clickControl = true;
-				mapService.getMap().then(function(map) {
-		            map.on("click", function(e) {
-		               clickListeners.forEach(function(listener) {
-		            	   var callback = listener.callback,
-		            	   		point = {
-		            			   x: e.latlng.lng,
-		            			   y: e.latlng.lat
-		            	   		};
-		            	   
-		            	   point.lat = point.y;
-		            	   point.lng = point.x;
-		                   if(listener.bound) {
-		                	   callback.bind(listener.bound);
-		                   }
-		                   callback(point);
-		                }); 
-		            });
-				});
-			}
-		},
-		
-		getMetaData : function() {
-			return httpData.get(metaDataUrl, {cache:true});
-		},
-		
-		moveMarker : function(point) {
-			mapService.getMap().then(function(map) {
-				var size, offset, icon;
+	    });
+        return this._container;
+	},
 	
-				if(marker) {
-					map.removeLayer(marker);
-				}
-				marker = point? L.marker(point).addTo(map): null;
-			});
-			
-		},
-		
-		removeMarker : function() {
-			if(marker) {
-				mapService.getMap().then(function(map) {
-					map.removeLayer(marker);
-					marker = null;					
-				});
-			}			
-		},
-		
-		showPoint : function(point) {
-			$rootScope.$broadcast("map.point.changed", point);
-		},
-		
-		removePoint : function() {
-			$rootScope.$broadcast("map.point.changed", null);
-		},
-		
-		getBehaviour : function(geometryType) {
-			
-		},
-		
-		getInfo : function(point) {
-			return mapService.getMap().then(function(map) {
-				var bounds = map._container.getBoundingClientRect(),
-					ratio = (window.devicePixelRatio)?window.devicePixelRatio : 1,
-					extent = map.getBounds();
-
-				return configService.getConfig("clientSessionId").then(function(id) {			
-					return httpData.post(featuresUnderPointUrl, {
-							clientSessionId : id,
-							x:point.x, 
-							y:point.y, 
-							width:bounds.width / ratio, 
-							height:bounds.height / ratio,
-							extent : {
-								left : extent.left,
-								right : extent.right,
-								top: extent.top,
-								bottom: extent.bottom
-					}}).then(function(response) {
-						return response.data;
-					});
-				});
-			});
-		},
-		
-		overFeatures : function(features) {
-			var item;
-			if(!features) {
-				return;
-			}
-			if(angular.isArray(features)) {
-				item = features[0];
-			} else {
-				item = features;
-			}
-			if(item) {
-				item.bringToFront().setStyle({color:"red"});
-			}
-		},
-		
-		outFeatures : function(features) {
-			if(!features) {
-				return;
-			}
-			features.forEach(function(feature) {
-				feature.setStyle({color : '#03f'});
-			}); 			
-		},
-		
-		createLayer : function() {
-			return mapService.getMap().then(function(map) {
-				layer = L.layerGroup();
-				map.addLayer(layer);
-				return layer;
-			});	
-		},
-		
-		removeLayer : function() {		
-			return mapService.getMap().then(function(map) {
-				if(layer) {
-					map.removeLayer(layer);
-				}
-                /* jshint -W093 */
-				return layer = null;
-			});	
-		},
-		
-		createFeature : function(data) {
-			return esriGeometryMapping[data.geometryType].createFeatures(data.geometry);
-		},
-		
-		showFeature : function(data) {
-			var features = this.createFeature(data);
-			features.forEach(function(feature) {
-				layer.addLayer(feature);				
-			});
-			return features;
-		},
-		
-		hideFeature : function(features) {
-			if(features) {
-				features.forEach(function(feature) {
-					layer.removeLayer(feature);					
-				});
-			}
-		}
-	};
-}])
-
-.filter("dashNull", [function() {
-	return function(value) {
-		if(!value || "Null" == value) {
-			return "-";
-		}
-		return value;
-	};
-}])
-
-.filter("featureGroups", [function() {
-	return function(items) {
-		var groups = [],
-			set = {};
-		if(!items) {
-			return groups;
-		}
-		items.forEach(function(item) {
-			var layerName = item.layerName;
-			if(!set[layerName]) {
-				set[layerName] = true;
-				groups.push(layerName);
-			}
-		});
-		return groups;
-	};
-}])
-
-.filter("filterGroupsByLayername", [function() {
-	return function(items, layerName) {
-		var group = [];
-		if(!items) {
-			return group;
-		}
-		items.forEach(function(item) {
-			if(layerName == item.layerName) {
-				group.push(item);
-			}
-		});
-		return group;
-	};
-}])
-
-
-.controller("OverFeatureCtrl", ['$filter', 'pointService', function($filter, pointService) {
-	this.click = function() {
-	};
-
-	this.mouseenter = function(feature) {
-		pointService.overFeatures(feature.feature);
-	};
+	activate: function() {
+	    L.DomUtil.addClass(this._container, 'active');
+	},
 	
-	this.mouseleave = function(feature) {
-		pointService.outFeatures(feature.feature);
-	};
-	
-	this.groupEnter = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.overFeatures(feature.feature);
-		});
-	};
-	
-	this.groupLeave = function(results, item) {
-		var group = $filter("filterGroupsByLayername")(results, item);
-		group.forEach(function(feature){
-			pointService.outFeatures(feature.feature);
-		});
-	};
-}]);
+	deactivate: function() {
+	    L.DomUtil.removeClass(this._container, 'active');
+	    this._active = false;
+	}
+});
 
-})(angular, L, window);
+L.control.features = function (options) {
+	return new L.Control.Features(options);
+};
+	
+})(L);
 
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
@@ -4101,63 +4159,72 @@ L.control.legend = function (options) {
 	
 })(L);
 
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
+L.Control.MousePosition = L.Control.extend({
+  options: {
+    position: 'bottomleft',
+    separator: ' : ',
+    emptyString: 'Unavailable',
+    lngFirst: false,
+    numDigits: 5,
+    elevGetter: undefined,
+    lngFormatter: undefined,
+    latFormatter: undefined,
+    prefix: ""
+  },
 
-(function(L) {
+  onAdd: function (map) {
+    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+    L.DomEvent.disableClickPropagation(this._container);
+    map.on('mousemove', this._onMouseMove, this);
+    this._container.innerHTML=this.options.emptyString;
+    return this._container;
+  },
 
-'use strict';
+  onRemove: function (map) {
+    map.off('mousemove', this._onMouseMove);
+  },
 
-L.Control.Features = L.Control.extend({
-	_active: false,
-	_map: null,
-	includes: L.Mixin.Events,
-	options: {
-	    position: 'topleft',
-	    className: 'fa fa-location-arrow fa-rotate-180',
-	    modal: false
-	},
-	
-	onAdd: function (map) {
-	    this._map = map;
-	    this._container = L.DomUtil.create('div', 'leaflet-feature-control leaflet-bar');
-	    this._container.title = "Show features under point";
-	    var link = L.DomUtil.create('a', this.options.className, this._container);
-        link.href = "#";
+  _onMouseHover: function () {
+    var info = this._hoverInfo;
+    this._hoverInfo = undefined;
+    this.options.elevGetter(info).then(function(elevStr) {
+       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
+       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
+    }.bind(this));
+  },
 
-        L.DomEvent.on(this._container, 'dblclick', L.DomEvent.stop)
-	            .on(this._container, 'click', L.DomEvent.stop)
-	            .on(this._container, 'click', function(e) {
-	        
-	        this._active = !this._active;
-	       
-	        if(this._active) {
-	        	map.fireEvent("featuresactivate", e);
-	        	L.DomUtil.addClass(this, 'active');
-	        } else {
-	        	map.fireEvent("featuresdeactivate", e);
-	        	L.DomUtil.removeClass(this, 'active');
-			}
-	    });
-        return this._container;
-	},
-	
-	activate: function() {
-	    L.DomUtil.addClass(this._container, 'active');
-	},
-	
-	deactivate: function() {
-	    L.DomUtil.removeClass(this._container, 'active');
-	    this._active = false;
-	}
+  _onMouseMove: function (e) {
+    var w = e.latlng.wrap();
+    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
+    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
+    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
+    if (this.options.elevGetter) {
+        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
+        this._hoverInfo = {
+            lat: w.lat,
+            lng: w.lng,
+            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
+        };
+    }
+    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
+  }
+
 });
 
-L.control.features = function (options) {
-	return new L.Control.Features(options);
+L.Map.mergeOptions({
+    positionControl: false
+});
+
+L.Map.addInitHook(function () {
+    if (this.options.positionControl) {
+        this.positionControl = new L.Control.MousePosition();
+        this.addControl(this.positionControl);
+    }
+});
+
+L.control.mousePosition = function (options) {
+    return new L.Control.MousePosition(options);
 };
-	
-})(L);
 
 /*
  * Google layer using Google Maps API
@@ -4528,73 +4595,6 @@ L.Control.Zoomout = L.Control.extend({
 L.control.zoomout = function (options) {
   return new L.Control.Zoomout(options);
 };
-L.Control.MousePosition = L.Control.extend({
-  options: {
-    position: 'bottomleft',
-    separator: ' : ',
-    emptyString: 'Unavailable',
-    lngFirst: false,
-    numDigits: 5,
-    elevGetter: undefined,
-    lngFormatter: undefined,
-    latFormatter: undefined,
-    prefix: ""
-  },
-
-  onAdd: function (map) {
-    this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
-    L.DomEvent.disableClickPropagation(this._container);
-    map.on('mousemove', this._onMouseMove, this);
-    this._container.innerHTML=this.options.emptyString;
-    return this._container;
-  },
-
-  onRemove: function (map) {
-    map.off('mousemove', this._onMouseMove);
-  },
-
-  _onMouseHover: function () {
-    var info = this._hoverInfo;
-    this._hoverInfo = undefined;
-    this.options.elevGetter(info).then(function(elevStr) {
-       if (this._hoverInfo) return; // a new _hoverInfo was created => mouse has moved meanwhile
-       this._container.innerHTML = this.options.prefix + ' ' + elevStr + ' ' + this._latLngValue;
-    }.bind(this));
-  },
-
-  _onMouseMove: function (e) {
-    var w = e.latlng.wrap();
-    lng = this.options.lngFormatter ? this.options.lngFormatter(w.lng) : L.Util.formatNum(w.lng, this.options.numDigits);
-    lat = this.options.latFormatter ? this.options.latFormatter(w.lat) : L.Util.formatNum(w.lat, this.options.numDigits);
-    this._latLngValue = this.options.lngFirst ? lng + this.options.separator + lat : lat + this.options.separator + lng;
-    if (this.options.elevGetter) {
-        if (this._hoverInfo) window.clearTimeout(this._hoverInfo.timeout);
-        this._hoverInfo = {
-            lat: w.lat,
-            lng: w.lng,
-            timeout: window.setTimeout(this._onMouseHover.bind(this), 400)
-        };
-    }
-    this._container.innerHTML = this.options.prefix + ' ' + this._latLngValue;
-  }
-
-});
-
-L.Map.mergeOptions({
-    positionControl: false
-});
-
-L.Map.addInitHook(function () {
-    if (this.options.positionControl) {
-        this.positionControl = new L.Control.MousePosition();
-        this.addControl(this.positionControl);
-    }
-});
-
-L.control.mousePosition = function (options) {
-    return new L.Control.MousePosition(options);
-};
-
 (function(L) {
 	L.Polyline.prototype.getLength = function () {
         var total = 0,
