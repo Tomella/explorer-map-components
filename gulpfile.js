@@ -52,7 +52,7 @@ gulp.task('copyToOthers', function() {
 //    gulp.src(['dist/searches.js', 'dist/searches-leaflet.js'])
 //        .pipe(gulp.dest('../explorer-wells-surveys/src/main/webapp/bower_components/explorer-search-components/dist'))
 //    gulp.src(['dist/ga-explorer-map.js', 'dist/ga-explorer-map.min.js', 'ga-explorer-map.css'])
-//        .pipe(gulp.dest('../explorer-rock-properties/src/main/webapp/rock-properties/bower_components/ga-explorer-map-components/dist'))
+//        .pipe(gulp.dest('../fsdf-elvis/dist/icsm/bower_components/ga-explorer-map-components/dist'))
 });
 
 
