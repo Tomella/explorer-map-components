@@ -1,31 +1,29 @@
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular, L) {
-
-'use strict';
+{
 
 angular.module("explorer.crosshair", ['geo.map'])
 
 .factory('crosshairService', ['mapService', function(mapService) {
 	var map, crosshair;
-	
-	mapService.getMap().then(function(olMap) { 
-		map = olMap; 
+
+	mapService.getMap().then(function(olMap) {
+		map = olMap;
 	});
-	
-	return {		
+
+	return {
 		add : function(point) {
             this.move(point);
 		},
-		
+
 		remove : function() {
 			if(crosshair) {
 				map.removeLayer(crosshair);
-				crosshair = null; 
+				crosshair = null;
 			}
 		},
-		
+
 		move : function(point) {
 			var size, icon;
 			if(!point) {
@@ -44,4 +42,4 @@ angular.module("explorer.crosshair", ['geo.map'])
 	};
 }]);
 
-})(angular, L);
+}

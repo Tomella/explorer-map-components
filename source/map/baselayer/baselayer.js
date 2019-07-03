@@ -1,8 +1,8 @@
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-(function(angular) {
-'use strict';
+{
+
 angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map'])
 
 .directive('geoBaselayerControl', ['$rootScope', 'mapHelper', 'mapService', function($rootScope, mapHelper, mapService) {
@@ -156,4 +156,4 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map'])
     });
 }]);
 
-})(angular);
+}

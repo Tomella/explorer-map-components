@@ -2,9 +2,7 @@
  * Created by danielwild on 26/08/2015.
  * Partially ported to leaflet by jammirali on 1/06/2016.
  */
-(function(angular, L) {
-
-'use strict';
+{
 
 angular.module('geo.drawhelper', ['geo.map'])
 
@@ -149,4 +147,4 @@ angular.module('geo.drawhelper', ['geo.map'])
 
 }]);
 
-})(angular, L);
+}

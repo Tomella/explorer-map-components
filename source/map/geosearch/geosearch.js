@@ -1,6 +1,4 @@
-(function (angular, google, window) {
-
-'use strict';
+{
 
 angular.module('geo.geosearch', ['ngAutocomplete'])
 
@@ -16,7 +14,7 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 	};
 }])
 
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper', 
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper',
                        function($log, $q, googleService, mapHelper) {
 	return {
 		controller:["$scope", function($scope) {
@@ -25,7 +23,7 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 				from:{},
 				to:{}
 			};
-			
+
 			$scope.zoom = function(marker) {
 				var promise, promises = [];
 				if($scope.values.from.description) {
@@ -35,7 +33,7 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 						// Hide the dialog.
 						$scope.item = "";
 					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");							
+						$log.debug("Failed to complete the from lookup.");
 					});
 					promises.push(promise);
 				}
@@ -49,7 +47,7 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 					});
 					promises.push(promise);
 				}
-				
+
 				if(promises.length > 0) {
 					$q.all(promises).then(function() {
 						var results = [];
@@ -61,11 +59,11 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 						}
 						mapHelper.zoomToMarkPoints(results, marker);
 						if(promises.length == 1) {
-							
+
 						}
 						$log.debug("Updating the map with what we have");
 					});
-				}		
+				}
 				$log.debug("Zooming to map soon.");
 			};
 		}]
@@ -77,7 +75,7 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 	service;
 	try {
 		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode'] 
+						types: ['geocode']
 					});
 	} catch(e) {
 		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
@@ -101,9 +99,9 @@ angular.module('geo.geosearch', ['ngAutocomplete'])
 					});
 				}
 			});
-			return deferred.promise;   
+			return deferred.promise;
 		}
 	};
 }]);
 
-}(angular, google, window));
+}
