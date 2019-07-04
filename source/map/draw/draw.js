@@ -73,7 +73,8 @@
                            $rootScope.$broadcast(parameters.lineEvent, data);
                         },
                         polygon: function () {
-                           var data = { length: event.layer.getLength(), geometry: event.layer.getLatLngs() };
+                           console.log(event.layer);
+                           var data = event.layer.getLatLngs();
                            $rootScope.$broadcast(parameters.polygonEvent, data);
                         },
                         // With rectangles only one can be drawn at a time.

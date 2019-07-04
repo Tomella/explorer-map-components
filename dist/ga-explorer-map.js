@@ -1099,51 +1099,6 @@ angular.module('geo.baselayer.control', ['geo.maphelper', 'geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-{
-
-angular.module("explorer.crosshair", ['geo.map'])
-
-.factory('crosshairService', ['mapService', function(mapService) {
-	var map, crosshair;
-
-	mapService.getMap().then(function(olMap) {
-		map = olMap;
-	});
-
-	return {
-		add : function(point) {
-            this.move(point);
-		},
-
-		remove : function() {
-			if(crosshair) {
-				map.removeLayer(crosshair);
-				crosshair = null;
-			}
-		},
-
-		move : function(point) {
-			var size, icon;
-			if(!point) {
-				return;
-			}
-			this.remove();
-			icon = L.icon({
-			    iconUrl: 'resources/img/cursor-crosshair.png',
-			    iconAnchor : [16, 16]
-			});
-
-	        crosshair = L.marker([point.y, point.x], {icon: icon});
-	        crosshair.addTo(map);
-	        return point;
-		},
-	};
-}]);
-
-}
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 
 {
 
@@ -1216,7 +1171,8 @@ angular.module("explorer.crosshair", ['geo.map'])
                            $rootScope.$broadcast(parameters.lineEvent, data);
                         },
                         polygon: function () {
-                           var data = { length: event.layer.getLength(), geometry: event.layer.getLatLngs() };
+                           console.log(event.layer);
+                           var data = event.layer.getLatLngs();
                            $rootScope.$broadcast(parameters.polygonEvent, data);
                         },
                         // With rectangles only one can be drawn at a time.
@@ -1283,195 +1239,51 @@ angular.module("explorer.crosshair", ['geo.map'])
       }]);
 
 }
-/**
- * Created by danielwild on 26/08/2015.
- * Partially ported to leaflet by jammirali on 1/06/2016.
- */
-{
-
-angular.module('geo.drawhelper', ['geo.map'])
-
-/**
- * A collection of helper functions for drawing shapes etc.
- *
- * PolyLine (renders with Primitive, for extruded 'fence')
- * Polygon
- * Extent
- *
- */
-
-
-.factory('drawHelperService', ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
-
-    var service = {}, drawOptions, polygonDrawer, polylineDrawer, rectangleDrawer;
-
-    service.getDrawHelper = function(){
-
-        if (polygonDrawer) return $q.when(service);
-
-        var deferred = $q.defer();
-        mapService.getMap().then(function(map){
-            var options = {
-               color: '#000099',
-               opacity: 0.4
-            };
-            polygonDrawer = new L.Draw.Polygon(map, options);
-            polylineDrawer = new L.Draw.Polyline(map, options);
-            rectangleDrawer = new L.Draw.Rectangle(map, options);
-            function callCallback(event) {
-                if (drawOptions.callback) {
-                    var layer = drawOptions._layer;
-                    if (!layer)
-                        drawOptions.callback(null);
-                    else ({
-                        polygon : function() {
-                            drawOptions.callback(layer.getLatLngs());
-                        },
-                        polyline : function() {
-                            drawOptions.callback({length:layer.getLength(), positions:layer.getLatLngs()});
-                        },
-                        rectangle : function() {
-                            drawOptions.callback(layer.getBounds());
-                        }
-                    })[drawOptions._layerType]();
-                }
-            }
-            function doneDrawing(event) {
-                callCallback(event);
-                broadcastDrawState(false);
-            }
-            map.on("draw:created", function(event) {
-                drawOptions._layer = event.layer;
-                if (!drawOptions.editable) return doneDrawing(event);
-                callCallback(event);
-                map.addLayer(drawOptions._layer);
-                event.layer.options.editing = options;
-                event.layer.editing.enable();
-            });
-            map.on("draw:deleted", doneDrawing);
-            map.on("draw:edited", doneDrawing);
-            map.on("draw:editresized", callCallback);
-            map.on("draw:editvertex", callCallback);
-            deferred.resolve(service);
-        });
-        return deferred.promise;
-    };
-
-    /**
-     *
-     * Wrapper for DrawHelper.startDrawingPolyline
-     *
-     * @param options {
- *      callback: Function,
- *      editable: Boolean,
- *      width: Number, // ignored
- *      geodesic: Boolean // ignored
- * }
-     *
-     */
-    service.drawPolyline = function(options){
-        broadcastDrawState(true);
-        drawOptions = options;
-        drawOptions._layerType = "polyline";
-        polylineDrawer.enable();
-    };
-
-    /**
-     *
-     * Wrapper for DrawHelper.startDrawingPolygon
-     *
-     * @param options {
-*      callback: Function,
-*       editable: Boolean
-* }
-     *
-     */
-    service.drawPolygon = function(options){
-        broadcastDrawState(true);
-        drawOptions = options;
-        drawOptions._layerType = "polygon";
-        polygonDrawer.enable();
-    };
-
-    /**
-     *
-     * Wrapper for DrawHelper.startDrawingExtent
-     *
-     * @param options {
-*      callback: Function,
-*      editable: Boolean
-* }
-     *
-     */
-    service.drawExtent = function(options){
-        broadcastDrawState(true);
-        drawOptions = options;
-        drawOptions._layerType = "rectangle";
-        rectangleDrawer.enable();
-    };
-
-    service.stopDrawing = function(){
-        if (drawOptions && drawOptions._layer) {
-            var layer = drawOptions._layer;
-            mapService.getMap().then(function(map) {
-                map.removeLayer(layer);
-            });
-        }
-        drawOptions = undefined;
-        polygonDrawer.disable();
-        polylineDrawer.disable();
-        rectangleDrawer.disable();
-        broadcastDrawState(false);
-    };
-
-    function broadcastDrawState(active){
-        $rootScope.$broadcast('drawhelper.active', active);
-    }
-
-    return service;
-
-}]);
-
-}
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
 {
 
-angular.module("geo.extent", [])
+angular.module("explorer.crosshair", ['geo.map'])
 
-.directive("geoExtent", ['$log', function($log) {
-	// We are Australia.
-	var DEFAULT_OPTIONS = {
-        center:[-28, 135],
-        zoom:5
-	};
+.factory('crosshairService', ['mapService', function(mapService) {
+	var map, crosshair;
+
+	mapService.getMap().then(function(olMap) {
+		map = olMap;
+	});
+
 	return {
-		require : "^geoMap",
-		restrict : "AE",
-		scope : {
-			options: "="
+		add : function(point) {
+            this.move(point);
 		},
-		link : function(scope, element, attrs, ctrl) {
-			if(typeof scope.options == "undefined") {
-				scope.options = {};
-			}
-			if(typeof scope.options.center == "undefined") {
-				scope.options.center = DEFAULT_OPTIONS.center;
-			}
-			if(typeof scope.options.zoom == "undefined") {
-				scope.options.zoom = DEFAULT_OPTIONS.zoom;
-			}
 
-			ctrl.getMap().then(function(map) {
-				L.control.zoommin(scope.options).addTo(map);
+		remove : function() {
+			if(crosshair) {
+				map.removeLayer(crosshair);
+				crosshair = null;
+			}
+		},
+
+		move : function(point) {
+			var size, icon;
+			if(!point) {
+				return;
+			}
+			this.remove();
+			icon = L.icon({
+			    iconUrl: 'resources/img/cursor-crosshair.png',
+			    iconAnchor : [16, 16]
 			});
-		}
+
+	        crosshair = L.marker([point.y, point.x], {icon: icon});
+	        crosshair.addTo(map);
+	        return point;
+		},
 	};
 }]);
 
 }
-
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -1813,6 +1625,195 @@ angular.module("geo.extent", [])
 
 }
 
+/**
+ * Created by danielwild on 26/08/2015.
+ * Partially ported to leaflet by jammirali on 1/06/2016.
+ */
+{
+
+angular.module('geo.drawhelper', ['geo.map'])
+
+/**
+ * A collection of helper functions for drawing shapes etc.
+ *
+ * PolyLine (renders with Primitive, for extruded 'fence')
+ * Polygon
+ * Extent
+ *
+ */
+
+
+.factory('drawHelperService', ['$q', '$rootScope', 'mapService', function($q, $rootScope, mapService) {
+
+    var service = {}, drawOptions, polygonDrawer, polylineDrawer, rectangleDrawer;
+
+    service.getDrawHelper = function(){
+
+        if (polygonDrawer) return $q.when(service);
+
+        var deferred = $q.defer();
+        mapService.getMap().then(function(map){
+            var options = {
+               color: '#000099',
+               opacity: 0.4
+            };
+            polygonDrawer = new L.Draw.Polygon(map, options);
+            polylineDrawer = new L.Draw.Polyline(map, options);
+            rectangleDrawer = new L.Draw.Rectangle(map, options);
+            function callCallback(event) {
+                if (drawOptions.callback) {
+                    var layer = drawOptions._layer;
+                    if (!layer)
+                        drawOptions.callback(null);
+                    else ({
+                        polygon : function() {
+                            drawOptions.callback(layer.getLatLngs());
+                        },
+                        polyline : function() {
+                            drawOptions.callback({length:layer.getLength(), positions:layer.getLatLngs()});
+                        },
+                        rectangle : function() {
+                            drawOptions.callback(layer.getBounds());
+                        }
+                    })[drawOptions._layerType]();
+                }
+            }
+            function doneDrawing(event) {
+                callCallback(event);
+                broadcastDrawState(false);
+            }
+            map.on("draw:created", function(event) {
+                drawOptions._layer = event.layer;
+                if (!drawOptions.editable) return doneDrawing(event);
+                callCallback(event);
+                map.addLayer(drawOptions._layer);
+                event.layer.options.editing = options;
+                event.layer.editing.enable();
+            });
+            map.on("draw:deleted", doneDrawing);
+            map.on("draw:edited", doneDrawing);
+            map.on("draw:editresized", callCallback);
+            map.on("draw:editvertex", callCallback);
+            deferred.resolve(service);
+        });
+        return deferred.promise;
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingPolyline
+     *
+     * @param options {
+ *      callback: Function,
+ *      editable: Boolean,
+ *      width: Number, // ignored
+ *      geodesic: Boolean // ignored
+ * }
+     *
+     */
+    service.drawPolyline = function(options){
+        broadcastDrawState(true);
+        drawOptions = options;
+        drawOptions._layerType = "polyline";
+        polylineDrawer.enable();
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingPolygon
+     *
+     * @param options {
+*      callback: Function,
+*       editable: Boolean
+* }
+     *
+     */
+    service.drawPolygon = function(options){
+        broadcastDrawState(true);
+        drawOptions = options;
+        drawOptions._layerType = "polygon";
+        polygonDrawer.enable();
+    };
+
+    /**
+     *
+     * Wrapper for DrawHelper.startDrawingExtent
+     *
+     * @param options {
+*      callback: Function,
+*      editable: Boolean
+* }
+     *
+     */
+    service.drawExtent = function(options){
+        broadcastDrawState(true);
+        drawOptions = options;
+        drawOptions._layerType = "rectangle";
+        rectangleDrawer.enable();
+    };
+
+    service.stopDrawing = function(){
+        if (drawOptions && drawOptions._layer) {
+            var layer = drawOptions._layer;
+            mapService.getMap().then(function(map) {
+                map.removeLayer(layer);
+            });
+        }
+        drawOptions = undefined;
+        polygonDrawer.disable();
+        polylineDrawer.disable();
+        rectangleDrawer.disable();
+        broadcastDrawState(false);
+    };
+
+    function broadcastDrawState(active){
+        $rootScope.$broadcast('drawhelper.active', active);
+    }
+
+    return service;
+
+}]);
+
+}
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+{
+
+angular.module("geo.extent", [])
+
+.directive("geoExtent", ['$log', function($log) {
+	// We are Australia.
+	var DEFAULT_OPTIONS = {
+        center:[-28, 135],
+        zoom:5
+	};
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		scope : {
+			options: "="
+		},
+		link : function(scope, element, attrs, ctrl) {
+			if(typeof scope.options == "undefined") {
+				scope.options = {};
+			}
+			if(typeof scope.options.center == "undefined") {
+				scope.options.center = DEFAULT_OPTIONS.center;
+			}
+			if(typeof scope.options.zoom == "undefined") {
+				scope.options.zoom = DEFAULT_OPTIONS.zoom;
+			}
+
+			ctrl.getMap().then(function(map) {
+				L.control.zoommin(scope.options).addTo(map);
+			});
+		}
+	};
+}]);
+
+}
+
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2043,6 +2044,113 @@ angular.module("explorer.feature.summary", ["geo.map"])
 }]);
 
 }
+{
+
+angular.module('geo.geosearch', ['ngAutocomplete'])
+
+.directive("expSearch", [function() {
+	return {
+		templateUrl : "components/geosearch/search.html",
+		scope : {
+			hideTo:"="
+		},
+		link : function(scope, element) {
+			element.addClass("");
+		}
+	};
+}])
+
+.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper',
+                       function($log, $q, googleService, mapHelper) {
+	return {
+		controller:["$scope", function($scope) {
+			// Place holders for the google response.
+			$scope.values = {
+				from:{},
+				to:{}
+			};
+
+			$scope.zoom = function(marker) {
+				var promise, promises = [];
+				if($scope.values.from.description) {
+					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
+						$log.debug("Received the results for from");
+						$scope.values.from.results = results;
+						// Hide the dialog.
+						$scope.item = "";
+					}, function(error) {
+						$log.debug("Failed to complete the from lookup.");
+					});
+					promises.push(promise);
+				}
+
+				if($scope.values.to && $scope.values.to.description) {
+					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
+						$log.debug("Received the results for to");
+						$scope.values.to.results = results;
+					}, function(error) {
+						$log.debug("Failed to complete the to lookup.");
+					});
+					promises.push(promise);
+				}
+
+				if(promises.length > 0) {
+					$q.all(promises).then(function() {
+						var results = [];
+						if($scope.values.from && $scope.values.from.results) {
+							results.push($scope.values.from.results);
+						}
+						if($scope.values.to && $scope.values.to.results) {
+							results.push($scope.values.to.results);
+						}
+						mapHelper.zoomToMarkPoints(results, marker);
+						if(promises.length == 1) {
+
+						}
+						$log.debug("Updating the map with what we have");
+					});
+				}
+				$log.debug("Zooming to map soon.");
+			};
+		}]
+	};
+}])
+
+.factory('googleService', ['$log', '$q', function($log, $q){
+	var geocoder = new google.maps.Geocoder(),
+	service;
+	try {
+		service = new google.maps.places.AutocompleteService(null, {
+						types: ['geocode']
+					});
+	} catch(e) {
+		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
+	}
+
+	return {
+		getAddressDetails: function(address, digester) {
+			var deferred = $q.defer();
+			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
+				if (status != google.maps.GeocoderStatus.OK) {
+					digester.$apply(function() {
+						deferred.reject("Failed to find address");
+					});
+				} else {
+					digester.$apply(function() {
+						deferred.resolve({
+							lat: results[0].geometry.location.lat(),
+							lon: results[0].geometry.location.lng(),
+							address: results[0].formatted_address
+						});
+					});
+				}
+			});
+			return deferred.promise;
+		}
+	};
+}]);
+
+}
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2223,113 +2331,6 @@ angular.module('explorer.layers', ['geo.map'])
 }]);
 
 })(angular, L);
-{
-
-angular.module('geo.geosearch', ['ngAutocomplete'])
-
-.directive("expSearch", [function() {
-	return {
-		templateUrl : "components/geosearch/search.html",
-		scope : {
-			hideTo:"="
-		},
-		link : function(scope, element) {
-			element.addClass("");
-		}
-	};
-}])
-
-.directive('geoSearch', ['$log', '$q', 'googleService', 'mapHelper',
-                       function($log, $q, googleService, mapHelper) {
-	return {
-		controller:["$scope", function($scope) {
-			// Place holders for the google response.
-			$scope.values = {
-				from:{},
-				to:{}
-			};
-
-			$scope.zoom = function(marker) {
-				var promise, promises = [];
-				if($scope.values.from.description) {
-					promise = googleService.getAddressDetails($scope.values.from.description, $scope).then(function(results) {
-						$log.debug("Received the results for from");
-						$scope.values.from.results = results;
-						// Hide the dialog.
-						$scope.item = "";
-					}, function(error) {
-						$log.debug("Failed to complete the from lookup.");
-					});
-					promises.push(promise);
-				}
-
-				if($scope.values.to && $scope.values.to.description) {
-					promise = googleService.getAddressDetails($scope.values.to.description, $scope).then(function(results) {
-						$log.debug("Received the results for to");
-						$scope.values.to.results = results;
-					}, function(error) {
-						$log.debug("Failed to complete the to lookup.");
-					});
-					promises.push(promise);
-				}
-
-				if(promises.length > 0) {
-					$q.all(promises).then(function() {
-						var results = [];
-						if($scope.values.from && $scope.values.from.results) {
-							results.push($scope.values.from.results);
-						}
-						if($scope.values.to && $scope.values.to.results) {
-							results.push($scope.values.to.results);
-						}
-						mapHelper.zoomToMarkPoints(results, marker);
-						if(promises.length == 1) {
-
-						}
-						$log.debug("Updating the map with what we have");
-					});
-				}
-				$log.debug("Zooming to map soon.");
-			};
-		}]
-	};
-}])
-
-.factory('googleService', ['$log', '$q', function($log, $q){
-	var geocoder = new google.maps.Geocoder(),
-	service;
-	try {
-		service = new google.maps.places.AutocompleteService(null, {
-						types: ['geocode']
-					});
-	} catch(e) {
-		$log.debug("Catching google error that manifests itself when debugging in Firefox only");
-	}
-
-	return {
-		getAddressDetails: function(address, digester) {
-			var deferred = $q.defer();
-			geocoder.geocode({ address: address, region: "au" }, function(results, status) {
-				if (status != google.maps.GeocoderStatus.OK) {
-					digester.$apply(function() {
-						deferred.reject("Failed to find address");
-					});
-				} else {
-					digester.$apply(function() {
-						deferred.resolve({
-							lat: results[0].geometry.location.lat(),
-							lon: results[0].geometry.location.lng(),
-							address: results[0].formatted_address
-						});
-					});
-				}
-			});
-			return deferred.promise;
-		}
-	};
-}]);
-
-}
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
@@ -2526,33 +2527,6 @@ angular.module('geo.maphelper', ['geo.map'])
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
-
-(function(angular){
-'use strict';
-
-angular.module("geo.measure", [])
-
-.directive("geoMeasure", ['$log', function($log) {
-	return {
-		require : "^geoMap",
-		restrict : "AE",
-		link : function(scope, element, attrs, ctrl) {
-			ctrl.getMap().then(function(map) {
-				L.Control.measureControl().addTo(map);
-				// TODO. See if it is useful
-				map.on("draw:drawstop", function(data) {
-					$log.info("Draw stopped");
-					$log.info(data);
-				});
-			});
-		}
-	};
-}]);
-
-})(angular);
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
 (function(angular) {
 'use strict';
 
@@ -2586,6 +2560,133 @@ angular.module("explorer.mapstate", [])
 }]);
 
 })(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular){
+'use strict';
+
+angular.module("geo.measure", [])
+
+.directive("geoMeasure", ['$log', function($log) {
+	return {
+		require : "^geoMap",
+		restrict : "AE",
+		link : function(scope, element, attrs, ctrl) {
+			ctrl.getMap().then(function(map) {
+				L.Control.measureControl().addTo(map);
+				// TODO. See if it is useful
+				map.on("draw:drawstop", function(data) {
+					$log.info("Draw stopped");
+					$log.info(data);
+				});
+			});
+		}
+	};
+}]);
+
+})(angular);
+/*!
+ * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
+ */
+
+(function(angular, L) {
+
+'use strict';
+
+angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'explorer.message'])
+
+.directive("geoPath", ['mapService', 'pathService', '$rootScope', 'flashService', 'messageService', 'configService', '$timeout', '$q',
+                              function(mapService, pathService, $rootScope, flashService, messageService, configService, $timeout, $q) {
+	var KEY = "distance",
+		plotter;
+	
+	return {
+		controller:['$scope', function($scope) {
+			$scope.name = "PATH";
+			
+		}],
+		link :function(scope, element, attrs) {
+			scope.distanceMeasure = {
+					distance:"-"
+			};
+			
+			
+			// Set up some methods to get data
+			scope.showElevation = function() {
+				var points = plotter.getLatLngs();
+				
+				
+				var geometry = mapService.getDistanceGeometry(),
+					distance = geometry.clone().transform(EPSG3857, EPSG4326).getGeodesicLength();
+
+				scope.disable();
+				pathService.triggerElevationPlot({length:distance, geometry:geometry});
+			};
+			
+			scope.disable = function() {
+				scope.item = "";
+				closeHandler();
+			};
+			
+			scope.$watch("item", function(newValue, oldValue) {
+				if(newValue == KEY) {
+					flashService.add("Click on map to start a path or add next point. Double click to end path.", 4000);
+					mapService.getMap().then(function(map) {
+						plotter = L.Polyline.Plotter([], {weight:4});
+						plotter.addTo(map);
+					});
+				} else if(oldValue == KEY) {
+					closeHandler();					
+				}
+			});
+			
+			function closeHandler() {
+				mapService.getMap().then(function(map) {
+					map.removeLayer(plotter);
+				});
+			}
+		}
+	};
+}])
+
+.factory("pathService", ['$rootScope', function($rootScope) {
+	return {
+		triggerElevationPlot : function(data) {
+			$rootScope.$broadcast("elevation.plot.data", data);
+		}
+	};
+}])
+
+.filter('length', ['$filter', function($filter) {
+	// Nice representation of length for the UI.
+	var map = {units: "m", threshold: 100000, aboveThresholdUnits: "km", divideBy: 1000};
+
+	return function(length, free) {
+		var units, buffer;
+		
+		if(!length && length !== 0) {
+			return null;
+		}
+		
+		if(map.threshold && length > map.threshold) {
+			length = length / map.divideBy;
+			units = map.aboveThresholdUnits;
+		} else {
+			units = map.units;
+		}
+		
+		buffer = $filter("number")(length, 0) + " " + units;
+		if(free) {
+			return buffer;
+		}
+		return "(" + buffer + ")";
+	};
+}]);
+
+
+})(angular, L);
 (function main() {
 
        "use strict";
@@ -3285,106 +3386,6 @@ angular.module("explorer.mapstate", [])
        };
 
    })();
-/*!
- * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
- */
-
-(function(angular, L) {
-
-'use strict';
-
-angular.module("geo.path", ['geo.map', 'explorer.config', 'explorer.flasher', 'explorer.message'])
-
-.directive("geoPath", ['mapService', 'pathService', '$rootScope', 'flashService', 'messageService', 'configService', '$timeout', '$q',
-                              function(mapService, pathService, $rootScope, flashService, messageService, configService, $timeout, $q) {
-	var KEY = "distance",
-		plotter;
-	
-	return {
-		controller:['$scope', function($scope) {
-			$scope.name = "PATH";
-			
-		}],
-		link :function(scope, element, attrs) {
-			scope.distanceMeasure = {
-					distance:"-"
-			};
-			
-			
-			// Set up some methods to get data
-			scope.showElevation = function() {
-				var points = plotter.getLatLngs();
-				
-				
-				var geometry = mapService.getDistanceGeometry(),
-					distance = geometry.clone().transform(EPSG3857, EPSG4326).getGeodesicLength();
-
-				scope.disable();
-				pathService.triggerElevationPlot({length:distance, geometry:geometry});
-			};
-			
-			scope.disable = function() {
-				scope.item = "";
-				closeHandler();
-			};
-			
-			scope.$watch("item", function(newValue, oldValue) {
-				if(newValue == KEY) {
-					flashService.add("Click on map to start a path or add next point. Double click to end path.", 4000);
-					mapService.getMap().then(function(map) {
-						plotter = L.Polyline.Plotter([], {weight:4});
-						plotter.addTo(map);
-					});
-				} else if(oldValue == KEY) {
-					closeHandler();					
-				}
-			});
-			
-			function closeHandler() {
-				mapService.getMap().then(function(map) {
-					map.removeLayer(plotter);
-				});
-			}
-		}
-	};
-}])
-
-.factory("pathService", ['$rootScope', function($rootScope) {
-	return {
-		triggerElevationPlot : function(data) {
-			$rootScope.$broadcast("elevation.plot.data", data);
-		}
-	};
-}])
-
-.filter('length', ['$filter', function($filter) {
-	// Nice representation of length for the UI.
-	var map = {units: "m", threshold: 100000, aboveThresholdUnits: "km", divideBy: 1000};
-
-	return function(length, free) {
-		var units, buffer;
-		
-		if(!length && length !== 0) {
-			return null;
-		}
-		
-		if(map.threshold && length > map.threshold) {
-			length = length / map.divideBy;
-			units = map.aboveThresholdUnits;
-		} else {
-			units = map.units;
-		}
-		
-		buffer = $filter("number")(length, 0) + " " + units;
-		if(free) {
-			return buffer;
-		}
-		return "(" + buffer + ")";
-	};
-}]);
-
-
-})(angular, L);
 /*!
  * Copyright 2015 Geoscience Australia (http://www.ga.gov.au/copyright.html)
  */
