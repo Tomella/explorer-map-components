@@ -125,7 +125,11 @@
             }
 
             if (config.layers) {
-               config.layers.forEach(function (layer) {
+               var layers = config.layers.filter(function(layer) {
+                  return layer.visible !== false;
+               });
+
+               layers.forEach(function (layer) {
                   var group;
                   if (layer.type === "LayerGroup") {
                      if (layer.layers) {
@@ -196,6 +200,12 @@
 
             return map;
 
+         };
+
+         service.addLayer = function(config) {
+            this.getMap().then(function (map) {
+               addLayer(config, map, map);
+            });
          };
 
          return service;
